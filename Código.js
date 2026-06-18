@@ -1641,9 +1641,190 @@ function guardarVisita(d, correoVendedor) {
     resultado, puntos, 'manual'
   ]);
 
+  // Fase 4: si el resultado es producto no disponible, registra la demanda no cubierta.
+  if (resultado === 'Producto no disponible (sin stock)' && d.demanda && String(d.demanda.producto || '').trim()) {
+    guardarDemanda(d, correoVendedor);
+  }
+  // Fase 3: si no hubo contacto y el vendedor aportó datos de teléfono, registra la corrección.
+  if (resultado === 'No se obtuvo contacto' && d.correccion && _correccionTieneDatos(d.correccion)) {
+    guardarCorreccionContacto({
+      codigo: d.codigo, nombre: d.nombre,
+      telActual: d.correccion.telActual,
+      telAlternativo: d.correccion.telAlternativo,
+      validado: d.correccion.validado,
+      estadoCliente: d.correccion.estadoCliente,
+      notas: d.comentario
+    }, correoVendedor);
+  }
+
   const atendidosHoy = contarClientesUnicosHoy(correoVendedor);
   const puntosHoy = contarPuntosHoy(correoVendedor);
   return { exito: true, atendidosHoy: atendidosHoy, puntosHoy: puntosHoy, puntosRegistro: puntos };
+}
+
+// ============================================================
+// FASE 3 - CORRECCIÓN DE CONTACTO (staging para SAP / OCRD)
+// ============================================================
+const CORRECCIONES_HEADERS = ['Fecha', 'Vendedor', 'Código cliente', 'Cliente', 'Teléfono registrado actual', 'Teléfono alternativo propuesto', '¿Validado correcto?', 'Estado del cliente', 'Notas', 'Estado de sincronización'];
+
+function obtenerHojaCorrecciones() {
+  const ss = SpreadsheetApp.openById(SHEET_ID_CRM);
+  let h = ss.getSheetByName('CORRECCIONES_CONTACTO');
+  if (!h) {
+    h = ss.insertSheet('CORRECCIONES_CONTACTO');
+    h.appendRow(CORRECCIONES_HEADERS);
+    h.setFrozenRows(1);
+    h.getRange(1, 1, 1, CORRECCIONES_HEADERS.length).setFontWeight('bold');
+    h.setColumnWidth(3, 120); h.setColumnWidth(4, 220);
+  }
+  return h;
+}
+
+function _correccionTieneDatos(c) {
+  if (!c) return false;
+  const tel = String(c.telAlternativo || '').trim();
+  const val = String(c.validado || '').trim();
+  const est = String(c.estadoCliente || '').trim();
+  return !!(tel || val || est);
+}
+
+// Valida teléfono de El Salvador: 8 dígitos (acepta +503 opcional). Devuelve "" si inválido.
+function _normalizarTelefonoSV(tel) {
+  let s = String(tel || '').replace(/[^0-9]/g, '');
+  if (s.length === 11 && s.indexOf('503') === 0) s = s.substring(3);
+  return (s.length === 8) ? s : '';
+}
+
+// Registra/actualiza una corrección de contacto. Sirve tanto desde el formulario
+// de interacción ("No se obtuvo contacto") como desde el botón de la ficha (cualquier momento).
+function guardarCorreccionContacto(d, correoVendedor) {
+  try {
+    const h = obtenerHojaCorrecciones();
+    const telAlt = String(d.telAlternativo || '').trim();
+    let telAltNorm = '';
+    if (telAlt) {
+      telAltNorm = _normalizarTelefonoSV(telAlt);
+      if (!telAltNorm) return { exito: false, mensaje: 'El teléfono alternativo debe tener 8 dígitos (El Salvador).' };
+    }
+    h.appendRow([
+      Utilities.formatDate(new Date(), "GMT-6", "dd/MM/yyyy HH:mm"),
+      correoVendedor || 'Desconocido',
+      String(d.codigo || '').trim(),
+      String(d.nombre || '').trim(),
+      String(d.telActual || '').trim(),
+      telAltNorm,
+      String(d.validado || '').trim(),
+      String(d.estadoCliente || '').trim(),
+      String(d.notas || '').trim(),
+      'Pendiente revisión'
+    ]);
+    return { exito: true };
+  } catch (e) {
+    return { exito: false, mensaje: e.message };
+  }
+}
+
+// Lista de tareas para SAP: correcciones pendientes de revisión (para gerencia).
+function obtenerTareasSAP() {
+  try {
+    const h = obtenerHojaCorrecciones();
+    if (h.getLastRow() <= 1) return { exito: true, tareas: [] };
+    const data = h.getDataRange().getValues();
+    const tareas = [];
+    for (let i = 1; i < data.length; i++) {
+      let estadoSync = String(data[i][9] || '').trim();
+      if (estadoSync && estadoSync !== 'Pendiente revisión') continue;
+      tareas.push({
+        fila: i + 1,
+        fecha: (data[i][0] instanceof Date) ? Utilities.formatDate(data[i][0], "GMT-6", "dd/MM/yyyy HH:mm") : String(data[i][0]),
+        vendedor: String(data[i][1] || ''),
+        codigo: String(data[i][2] || ''),
+        cliente: String(data[i][3] || ''),
+        telActual: String(data[i][4] || ''),
+        telNuevo: String(data[i][5] || ''),
+        validado: String(data[i][6] || ''),
+        estadoCliente: String(data[i][7] || ''),
+        notas: String(data[i][8] || '')
+      });
+    }
+    return { exito: true, tareas: tareas };
+  } catch (e) {
+    return { exito: false, mensaje: e.message, tareas: [] };
+  }
+}
+
+// ============================================================
+// FASE 4 - DEMANDA NO CUBIERTA (producto que el cliente pidió y no teníamos)
+// ============================================================
+const DEMANDA_HEADERS = ['Fecha', 'Vendedor', 'Código cliente', 'Cliente', 'Producto solicitado', 'Marca', 'Cantidad estimada', 'Nota'];
+
+function obtenerHojaDemanda() {
+  const ss = SpreadsheetApp.openById(SHEET_ID_CRM);
+  let h = ss.getSheetByName('DEMANDA_NO_CUBIERTA');
+  if (!h) {
+    h = ss.insertSheet('DEMANDA_NO_CUBIERTA');
+    h.appendRow(DEMANDA_HEADERS);
+    h.setFrozenRows(1);
+    h.getRange(1, 1, 1, DEMANDA_HEADERS.length).setFontWeight('bold');
+    h.setColumnWidth(5, 240);
+  }
+  return h;
+}
+
+function guardarDemanda(d, correoVendedor) {
+  try {
+    const dem = d.demanda || {};
+    const producto = String(dem.producto || '').trim();
+    if (!producto) return { exito: false, mensaje: 'Falta el nombre del producto solicitado.' };
+    const h = obtenerHojaDemanda();
+    h.appendRow([
+      Utilities.formatDate(new Date(), "GMT-6", "dd/MM/yyyy HH:mm"),
+      correoVendedor || 'Desconocido',
+      String(d.codigo || '').trim(),
+      String(d.nombre || '').trim(),
+      producto,
+      String(dem.marca || '').trim(),
+      String(dem.cantidad || '').trim(),
+      String(d.comentario || '').trim()
+    ]);
+    return { exito: true };
+  } catch (e) {
+    return { exito: false, mensaje: e.message };
+  }
+}
+
+// Resumen para compras: productos más solicitados que no teníamos (conteo).
+function obtenerResumenDemanda() {
+  try {
+    const h = obtenerHojaDemanda();
+    if (h.getLastRow() <= 1) return { exito: true, productos: [], totalRegistros: 0 };
+    const data = h.getDataRange().getValues();
+    const conteo = {};
+    let total = 0;
+    for (let i = 1; i < data.length; i++) {
+      let prod = String(data[i][4] || '').trim();
+      if (!prod) continue;
+      let clave = prod.toLowerCase();
+      if (!conteo[clave]) conteo[clave] = { producto: prod, veces: 0, clientes: {} };
+      conteo[clave].veces++;
+      let cod = String(data[i][2] || '').trim();
+      if (cod) conteo[clave].clientes[cod] = true;
+      total++;
+    }
+    const productos = Object.keys(conteo).map(function(k) {
+      return { producto: conteo[k].producto, veces: conteo[k].veces, clientesUnicos: Object.keys(conteo[k].clientes).length };
+    }).sort(function(a, b) { return b.veces - a.veces; });
+    return { exito: true, productos: productos, totalRegistros: total };
+  } catch (e) {
+    return { exito: false, mensaje: e.message, productos: [] };
+  }
+}
+
+// Setup Fases 3 y 4: crea las hojas. Correr UNA vez (admin) o se crean solas al primer uso.
+function inicializarFase34() {
+  obtenerHojaCorrecciones();
+  obtenerHojaDemanda();
+  return { exito: true };
 }
 
 function obtenerReportesAdmin() {

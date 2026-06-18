@@ -341,6 +341,29 @@
                 <div id="rend-contenido" class="text-center text-xs text-slate-400 py-6 animate-pulse">Calculando…</div>
             </div>
 
+            <!-- FASES 3 y 4: tareas SAP + demanda no cubierta (solo admin) -->
+            <div id="panel-fase34" class="hidden grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                <div class="bg-white p-6 rounded-[30px] border border-rose-200 shadow-sm">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center gap-2">
+                            <span class="text-lg">📋</span>
+                            <h3 class="text-sm font-black text-slate-800">Tareas para SAP</h3>
+                        </div>
+                        <span id="sap-count" class="text-[10px] font-black text-rose-600 bg-rose-50 px-2 py-1 rounded-full">0</span>
+                    </div>
+                    <p class="text-[10px] text-slate-400 mb-3">Correcciones de teléfono/estado pendientes de aplicar en SAP.</p>
+                    <div id="sap-contenido" class="max-h-72 overflow-y-auto text-xs">Cargando…</div>
+                </div>
+                <div class="bg-white p-6 rounded-[30px] border border-amber-200 shadow-sm">
+                    <div class="flex items-center gap-2 mb-3">
+                        <span class="text-lg">📦</span>
+                        <h3 class="text-sm font-black text-slate-800">Demanda no cubierta</h3>
+                    </div>
+                    <p class="text-[10px] text-slate-400 mb-3">Productos más pedidos que no teníamos (para compras).</p>
+                    <div id="demanda-contenido" class="max-h-72 overflow-y-auto text-xs">Cargando…</div>
+                </div>
+            </div>
+
             <div id="bloque-fecha-admin" class="bg-slate-900 text-white p-5 rounded-[30px] shadow-md mb-6 hidden">
                 <div class="flex items-center justify-between gap-3 flex-wrap">
                     <div class="flex items-center gap-3">
@@ -602,6 +625,18 @@
                   <p class="text-[9px] font-black text-slate-400 uppercase mb-1">📞 Teléfonos</p>
                   <p id="mTel1" class="text-sm font-black text-slate-800">--</p>
                   <p id="mTel2" class="text-sm font-black text-slate-800">--</p>
+                  <button onclick="toggleCorreccionFicha()" class="mt-2 text-[9px] font-black text-rose-600 uppercase tracking-widest hover:text-rose-800 hover:bg-rose-50 px-3 py-1 rounded-full transition-all">📞 Corregir teléfono</button>
+                  <div id="bloque-correccion-ficha" class="hidden w-full mt-3 text-left">
+                      <input id="fic-telalt" type="tel" inputmode="numeric" class="w-full p-2.5 bg-white rounded-xl text-xs border border-rose-200 outline-none focus:ring-2 focus:ring-rose-400 mb-2" placeholder="Teléfono correcto (8 dígitos)">
+                      <select id="fic-estado" class="w-full p-2.5 bg-white rounded-xl text-xs border border-rose-200 outline-none focus:ring-2 focus:ring-rose-400 mb-2 font-bold text-slate-600">
+                          <option value="">Estado del cliente (opcional)</option>
+                          <option value="Activo">Activo</option>
+                          <option value="Inactivo">Inactivo</option>
+                          <option value="Cambió de razón social">Cambió de razón social</option>
+                          <option value="No localizable">No localizable</option>
+                      </select>
+                      <button id="btn-fic-guardar" onclick="guardarCorreccionFicha()" class="w-full bg-rose-600 text-white py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-rose-700 active:scale-95 transition-all">Guardar corrección para SAP</button>
+                  </div>
               </div>
               <div class="bg-slate-50 p-4 rounded-[25px] border text-center flex flex-col justify-center items-center">
                   <p class="text-[9px] font-black text-slate-400 uppercase mb-1">👤 Vendedor</p>
@@ -692,6 +727,35 @@
                   <option value="">— Selecciona el resultado —</option>
               </select>
               <p id="resultadoPuntos" class="text-[10px] font-black text-emerald-600 mb-4 h-3"></p>
+
+              <!-- Sub-formulario FASE 4: producto no disponible -->
+              <div id="bloque-demanda" class="hidden bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-4">
+                  <p class="text-[10px] font-black text-amber-600 uppercase mb-2 tracking-widest">📦 ¿Qué producto buscaba?</p>
+                  <input id="dem-producto" type="text" class="w-full p-3 bg-white rounded-xl text-sm border border-amber-200 outline-none focus:ring-2 focus:ring-amber-400 mb-2" placeholder="Producto solicitado (obligatorio)">
+                  <div class="flex gap-2">
+                      <input id="dem-marca" type="text" class="flex-1 p-3 bg-white rounded-xl text-sm border border-amber-200 outline-none focus:ring-2 focus:ring-amber-400" placeholder="Marca (opcional)">
+                      <input id="dem-cantidad" type="text" class="w-28 p-3 bg-white rounded-xl text-sm border border-amber-200 outline-none focus:ring-2 focus:ring-amber-400" placeholder="Cantidad">
+                  </div>
+              </div>
+
+              <!-- Sub-formulario FASE 3: corrección de contacto -->
+              <div id="bloque-contacto" class="hidden bg-rose-50 border border-rose-200 rounded-2xl p-4 mb-4">
+                  <p class="text-[10px] font-black text-rose-600 uppercase mb-2 tracking-widest">📞 ¿El número está mal? Corrígelo aquí</p>
+                  <input id="con-telalt" type="tel" inputmode="numeric" class="w-full p-3 bg-white rounded-xl text-sm border border-rose-200 outline-none focus:ring-2 focus:ring-rose-400 mb-2" placeholder="Teléfono correcto (8 dígitos, opcional)">
+                  <select id="con-validado" class="w-full p-3 bg-white rounded-xl text-sm border border-rose-200 outline-none focus:ring-2 focus:ring-rose-400 mb-2 font-bold text-slate-600">
+                      <option value="">¿El número registrado es correcto?</option>
+                      <option value="Correcto">✅ Sí, está correcto</option>
+                      <option value="Incorrecto">❌ No, está incorrecto</option>
+                  </select>
+                  <select id="con-estado" class="w-full p-3 bg-white rounded-xl text-sm border border-rose-200 outline-none focus:ring-2 focus:ring-rose-400 font-bold text-slate-600">
+                      <option value="">Estado del cliente (opcional)</option>
+                      <option value="Activo">Activo</option>
+                      <option value="Inactivo">Inactivo</option>
+                      <option value="Cambió de razón social">Cambió de razón social</option>
+                      <option value="No localizable">No localizable</option>
+                  </select>
+                  <p class="text-[9px] text-rose-400 font-bold mt-2">Esto crea una tarea para corregir en SAP (no escribe directo).</p>
+              </div>
 
               <!-- PASO 3: Nota -->
               <p class="text-[9px] font-black text-slate-400 uppercase mb-2 tracking-widest">3 · Detalle de lo acordado</p>
@@ -791,6 +855,12 @@
         const opt = sel.options[sel.selectedIndex];
         const pts = opt ? opt.getAttribute('data-pts') : null;
         lbl.innerText = (pts !== null && sel.value) ? ('Vale ' + pts + ' punto' + (pts == 1 ? '' : 's')) : '';
+
+        // Mostrar/ocultar sub-formularios según el resultado.
+        const bDem = document.getElementById('bloque-demanda');
+        const bCon = document.getElementById('bloque-contacto');
+        if (bDem) bDem.classList.toggle('hidden', sel.value !== 'Producto no disponible (sin stock)');
+        if (bCon) bCon.classList.toggle('hidden', sel.value !== 'No se obtuvo contacto');
     }
     let modoTareas = true; 
     let intervaloProgreso = null; 
@@ -898,6 +968,9 @@
             document.getElementById('tab-reportes').classList.remove('text-slate-600', 'bg-slate-100');
             cargarRendimiento();
             if(usuarioRol === 'Admin') {
+                document.getElementById('panel-fase34').classList.remove('hidden');
+                cargarTareasSAP();
+                cargarDemandaResumen();
                 fetchEstadoUsuarios();
                 document.getElementById('bloque-fecha-admin').classList.remove('hidden');
                 document.getElementById('bloque-cockpits-equipo').classList.remove('hidden');
@@ -2596,6 +2669,19 @@
             return;
         }
 
+        // FASE 4: nombre de producto obligatorio si no había stock.
+        if (resultadoVal === 'Producto no disponible (sin stock)') {
+            const prod = (document.getElementById('dem-producto').value || '').trim();
+            if (!prod) { alert("Escribe qué producto buscaba el cliente (es obligatorio)."); return; }
+        }
+        // FASE 3: si escribió teléfono alternativo, validar 8 dígitos.
+        if (resultadoVal === 'No se obtuvo contacto') {
+            const telAlt = (document.getElementById('con-telalt').value || '').replace(/[^0-9]/g, '');
+            if (telAlt && telAlt.replace(/^503/, '').length !== 8) {
+                alert("El teléfono correcto debe tener 8 dígitos (El Salvador)."); return;
+            }
+        }
+
         if (tipoSelect.value.includes('Visita')) {
             if (navigator.geolocation) {
                 btn.innerText = "📍 OBTENIENDO GPS...";
@@ -2636,6 +2722,9 @@
 
             btn.innerText = "✅ GUARDAR INTERACCIÓN"; btn.disabled = false;
             document.getElementById('nota').value = "";
+            ['dem-producto','dem-marca','dem-cantidad','con-telalt','con-validado','con-estado'].forEach(function(id){
+                var el = document.getElementById(id); if (el) el.value = "";
+            });
             const selRes = document.getElementById('resultado');
             if (selRes) { selRes.value = ""; onResultadoChange(); }
             closeM();
@@ -2679,7 +2768,101 @@
             tipoInteraccion: tipo,
             comentario: nota,
             gps: gps,
-            resultado: resultado
+            resultado: resultado,
+            demanda: (resultado === 'Producto no disponible (sin stock)') ? {
+                producto: (document.getElementById('dem-producto').value || '').trim(),
+                marca: (document.getElementById('dem-marca').value || '').trim(),
+                cantidad: (document.getElementById('dem-cantidad').value || '').trim()
+            } : null,
+            correccion: (resultado === 'No se obtuvo contacto') ? {
+                telActual: (function(){ var c = DATA.find(function(x){ return x.codigo === codCliente; }); return c ? (c.tel || '') : ''; })(),
+                telAlternativo: (document.getElementById('con-telalt').value || '').trim(),
+                validado: (document.getElementById('con-validado').value || '').trim(),
+                estadoCliente: (document.getElementById('con-estado').value || '').trim()
+            } : null
+        }, usuarioLogueado);
+    }
+
+    // ===== FASES 3 y 4: paneles de admin =====
+    function cargarTareasSAP() {
+        const cont = document.getElementById('sap-contenido');
+        const cnt = document.getElementById('sap-count');
+        if (!cont) return;
+        cont.innerHTML = '<p class="text-slate-400 py-3 text-center animate-pulse">Cargando…</p>';
+        google.script.run.withSuccessHandler(function(res){
+            if(!res || !res.exito){ cont.innerHTML = '<p class="text-rose-400 py-3 text-center">No se pudo cargar.</p>'; return; }
+            const t = res.tareas || [];
+            cnt.innerText = t.length;
+            if(!t.length){ cont.innerHTML = '<p class="text-slate-400 py-3 text-center">Sin tareas pendientes. 🎉</p>'; return; }
+            cont.innerHTML = t.map(function(x){
+                let detalle = [];
+                if(x.telNuevo) detalle.push('Tel → <b>'+x.telNuevo+'</b>'+(x.telActual?(' (antes '+x.telActual+')'):''));
+                if(x.estadoCliente) detalle.push('Estado: <b>'+x.estadoCliente+'</b>');
+                if(x.validado) detalle.push('Registrado: '+x.validado);
+                return '<div class="border-b border-slate-100 py-2">'
+                    + '<p class="font-bold text-slate-700">'+x.codigo+' · '+x.cliente+'</p>'
+                    + '<p class="text-slate-500 text-[11px]">'+detalle.join(' · ')+'</p>'
+                    + '<p class="text-[9px] text-slate-300">'+x.fecha+' · '+x.vendedor+'</p>'
+                    + '</div>';
+            }).join('');
+        }).withFailureHandler(function(){ cont.innerHTML = '<p class="text-rose-400 py-3 text-center">Error de red.</p>'; })
+          .obtenerTareasSAP();
+    }
+
+    function cargarDemandaResumen() {
+        const cont = document.getElementById('demanda-contenido');
+        if (!cont) return;
+        cont.innerHTML = '<p class="text-slate-400 py-3 text-center animate-pulse">Cargando…</p>';
+        google.script.run.withSuccessHandler(function(res){
+            if(!res || !res.exito){ cont.innerHTML = '<p class="text-rose-400 py-3 text-center">No se pudo cargar.</p>'; return; }
+            const p = res.productos || [];
+            if(!p.length){ cont.innerHTML = '<p class="text-slate-400 py-3 text-center">Sin registros aún.</p>'; return; }
+            cont.innerHTML = p.map(function(x, i){
+                return '<div class="flex items-center justify-between border-b border-slate-100 py-2">'
+                    + '<span class="font-bold text-slate-700 truncate pr-2">'+(i+1)+'. '+x.producto+'</span>'
+                    + '<span class="text-amber-600 font-black whitespace-nowrap">'+x.veces+'× <span class="text-[9px] text-slate-400">('+x.clientesUnicos+' cli)</span></span>'
+                    + '</div>';
+            }).join('');
+        }).withFailureHandler(function(){ cont.innerHTML = '<p class="text-rose-400 py-3 text-center">Error de red.</p>'; })
+          .obtenerResumenDemanda();
+    }
+
+    // ===== FASE 3: corregir teléfono desde la ficha (en cualquier momento) =====
+    function toggleCorreccionFicha() {
+        const b = document.getElementById('bloque-correccion-ficha');
+        if (b) b.classList.toggle('hidden');
+    }
+
+    function guardarCorreccionFicha() {
+        const btn = document.getElementById('btn-fic-guardar');
+        const cod = document.getElementById('mCod').innerText;
+        const nom = document.getElementById('mNom').innerText;
+        const telActual = document.getElementById('mTel1').innerText;
+        const telAlt = (document.getElementById('fic-telalt').value || '').trim();
+        const estado = (document.getElementById('fic-estado').value || '').trim();
+
+        if (!telAlt && !estado) { alert("Escribe el teléfono correcto o elige un estado del cliente."); return; }
+        const telNum = telAlt.replace(/[^0-9]/g, '').replace(/^503/, '');
+        if (telAlt && telNum.length !== 8) { alert("El teléfono correcto debe tener 8 dígitos (El Salvador)."); return; }
+
+        btn.innerText = "GUARDANDO..."; btn.disabled = true;
+        google.script.run.withSuccessHandler(function(res){
+            btn.innerText = "Guardar corrección para SAP"; btn.disabled = false;
+            if (res && res.exito) {
+                alert("✅ Corrección registrada. Quedó como tarea pendiente para SAP.");
+                document.getElementById('fic-telalt').value = "";
+                document.getElementById('fic-estado').value = "";
+                toggleCorreccionFicha();
+            } else {
+                alert((res && res.mensaje) ? res.mensaje : "No se pudo guardar la corrección.");
+            }
+        }).withFailureHandler(function(){
+            btn.innerText = "Guardar corrección para SAP"; btn.disabled = false;
+            alert("Error de red al guardar la corrección.");
+        }).guardarCorreccionContacto({
+            codigo: cod, nombre: nom, telActual: telActual,
+            telAlternativo: telAlt, validado: telAlt ? 'Incorrecto' : '', estadoCliente: estado,
+            notas: 'Corrección desde ficha de cliente'
         }, usuarioLogueado);
     }
 
