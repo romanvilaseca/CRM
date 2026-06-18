@@ -164,6 +164,187 @@ function migrarResultadosHistoricos() {
   return { exito: true, totalFilas: n, inferidas: inferidas, yaClasificadas: yaTenian, desglose: conteoPorResultado };
 }
 
+// ============================================================
+// FASE 2 - METAS POR USUARIO + RENDIMIENTO POR PUNTOS
+// Hoja METAS_USUARIO (editable): Vendedor | Meta puntos | Meta llamadas | Meta WhatsApp | Meta visitas
+// El cockpit pasa a medir PUNTOS (no clientes únicos) - decisión C3.
+// ============================================================
+const METAS_HEADERS = ['Vendedor (correo)', 'Meta puntos', 'Meta llamadas', 'Meta WhatsApp', 'Meta visitas'];
+
+// Crea METAS_USUARIO si no existe, con una fila por vendedor activo (no Admin).
+// Semilla: Meta puntos = meta_diaria_clientes existente (USUARIOS_AJUSTES col H). Resto en 0 (sin meta).
+function obtenerHojaMetasUsuario() {
+  const ss = SpreadsheetApp.openById(SHEET_ID_CRM);
+  let h = ss.getSheetByName('METAS_USUARIO');
+  if (!h) {
+    h = ss.insertSheet('METAS_USUARIO');
+    h.appendRow(METAS_HEADERS);
+    h.setFrozenRows(1);
+    h.getRange(1, 1, 1, METAS_HEADERS.length).setFontWeight('bold');
+    h.setColumnWidth(1, 260);
+    const hojaAjustes = ss.getSheetByName('USUARIOS_AJUSTES');
+    if (hojaAjustes) {
+      const datos = hojaAjustes.getDataRange().getDisplayValues();
+      for (let i = 1; i < datos.length; i++) {
+        let rol = String(datos[i][1]).trim();
+        let estado = String(datos[i][3]).trim();
+        if (estado !== 'Activo' || rol === 'Admin') continue;
+        let email = String(datos[i][0]).trim().toLowerCase();
+        if (!email) continue;
+        let metaPuntos = parseInt(String(datos[i][7] || '').trim(), 10);
+        if (isNaN(metaPuntos) || metaPuntos <= 0) metaPuntos = 10;
+        h.appendRow([email, metaPuntos, 0, 0, 0]);
+      }
+    }
+  }
+  return h;
+}
+
+// Devuelve un mapa email -> {puntos, llamadas, whatsapp, visitas}
+function obtenerTodasLasMetas() {
+  const h = obtenerHojaMetasUsuario();
+  const data = h.getDataRange().getValues();
+  const map = {};
+  for (let i = 1; i < data.length; i++) {
+    let email = String(data[i][0]).trim().toLowerCase();
+    if (!email) continue;
+    map[email] = {
+      puntos: parseFloat(data[i][1]) || 0,
+      llamadas: parseFloat(data[i][2]) || 0,
+      whatsapp: parseFloat(data[i][3]) || 0,
+      visitas: parseFloat(data[i][4]) || 0
+    };
+  }
+  return map;
+}
+
+function obtenerMetasUsuario(email) {
+  const map = obtenerTodasLasMetas();
+  const e = String(email || '').trim().toLowerCase();
+  return map[e] || { puntos: 10, llamadas: 0, whatsapp: 0, visitas: 0 };
+}
+
+// Convierte una celda de fecha de VISITAS a Date (solo día, zona El Salvador).
+function _fechaVisitaADate(fVal) {
+  let ds = (fVal instanceof Date)
+    ? Utilities.formatDate(fVal, "GMT-6", "dd/MM/yyyy")
+    : String(fVal).trim().substring(0, 10);
+  let p = ds.split('/');
+  if (p.length < 3) return null;
+  let d = parseInt(p[0], 10), m = parseInt(p[1], 10), y = parseInt(p[2], 10);
+  if (isNaN(d) || isNaN(m) || isNaN(y)) return null;
+  return new Date(y, m - 1, d);
+}
+
+function _refContexto(fechaStrOpcional) {
+  let ref;
+  if (fechaStrOpcional && /^\d{2}\/\d{2}\/\d{4}$/.test(fechaStrOpcional)) {
+    let p = fechaStrOpcional.split('/');
+    ref = new Date(parseInt(p[2],10), parseInt(p[1],10) - 1, parseInt(p[0],10));
+  } else {
+    let hoy = Utilities.formatDate(new Date(), "GMT-6", "dd/MM/yyyy").split('/');
+    ref = new Date(parseInt(hoy[2],10), parseInt(hoy[1],10) - 1, parseInt(hoy[0],10));
+  }
+  let dow = ref.getDay(); // 0=Dom..6=Sab
+  let offset = (dow === 0) ? 6 : (dow - 1); // semana inicia lunes
+  let weekStart = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate() - offset);
+  let weekEnd = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate() - offset + 6);
+  let monthStart = new Date(ref.getFullYear(), ref.getMonth(), 1);
+  let monthEnd = new Date(ref.getFullYear(), ref.getMonth() + 1, 0);
+  return { ref: ref, weekStart: weekStart, weekEnd: weekEnd, monthStart: monthStart, monthEnd: monthEnd };
+}
+
+function _bucketVacio() { return { puntos: 0, llamadas: 0, whatsapp: 0, visitas: 0 }; }
+
+function _acumular(bucket, tipo, puntos) {
+  bucket.puntos += puntos;
+  if (tipo === 'Llamada Telefónica') bucket.llamadas++;
+  else if (tipo === 'Contacto WhatsApp') bucket.whatsapp++;
+  else if (tipo === 'Visita en Persona') bucket.visitas++;
+}
+
+// Rendimiento de un vendedor: hoy / semana / mes (4 indicadores) + sus metas.
+function obtenerRendimientoUsuario(emailUsuario, fechaStrOpcional) {
+  try {
+    const email = String(emailUsuario || '').trim().toLowerCase();
+    if (!email) return { exito: false, mensaje: 'Email vacío' };
+    const ctx = _refContexto(fechaStrOpcional);
+    const ss = SpreadsheetApp.openById(SHEET_ID_CRM);
+    const h = ss.getSheetByName('VISITAS');
+    const hoy = _bucketVacio(), semana = _bucketVacio(), mes = _bucketVacio();
+    if (h && h.getLastRow() > 1) {
+      const data = h.getDataRange().getValues();
+      for (let i = 1; i < data.length; i++) {
+        if (String(data[i][1]).trim().toLowerCase() !== email) continue;
+        const rd = _fechaVisitaADate(data[i][0]);
+        if (!rd) continue;
+        const tipo = String(data[i][4] || '').trim();
+        const pts = parseFloat(data[i][8]) || 0;
+        const t = rd.getTime();
+        if (t === ctx.ref.getTime()) _acumular(hoy, tipo, pts);
+        if (t >= ctx.weekStart.getTime() && t <= ctx.weekEnd.getTime()) _acumular(semana, tipo, pts);
+        if (t >= ctx.monthStart.getTime() && t <= ctx.monthEnd.getTime()) _acumular(mes, tipo, pts);
+      }
+    }
+    [hoy, semana, mes].forEach(function(b){ b.puntos = Math.round(b.puntos * 100) / 100; });
+    return { exito: true, hoy: hoy, semana: semana, mes: mes, metas: obtenerMetasUsuario(email) };
+  } catch (e) {
+    return { exito: false, mensaje: e.message };
+  }
+}
+
+// Rendimiento consolidado del equipo (para gerencia): por vendedor hoy + metas.
+function obtenerRendimientoEquipo(fechaStrOpcional) {
+  try {
+    const ctx = _refContexto(fechaStrOpcional);
+    const ss = SpreadsheetApp.openById(SHEET_ID_CRM);
+    const hojaAjustes = ss.getSheetByName('USUARIOS_AJUSTES');
+    const metasMap = obtenerTodasLasMetas();
+    const asesores = {};
+    const orden = [];
+    if (hojaAjustes) {
+      const datos = hojaAjustes.getDataRange().getDisplayValues();
+      for (let i = 1; i < datos.length; i++) {
+        let rol = String(datos[i][1]).trim();
+        let estado = String(datos[i][3]).trim();
+        if (estado !== 'Activo' || rol === 'Admin') continue;
+        let email = String(datos[i][0]).trim().toLowerCase();
+        if (!email) continue;
+        let alias = String(datos[i][4]).trim() || email.split('@')[0];
+        asesores[email] = { email: email, alias: alias, metas: metasMap[email] || { puntos: 10, llamadas: 0, whatsapp: 0, visitas: 0 }, hoy: _bucketVacio() };
+        orden.push(email);
+      }
+    }
+    const h = ss.getSheetByName('VISITAS');
+    if (h && h.getLastRow() > 1) {
+      const data = h.getDataRange().getValues();
+      for (let i = 1; i < data.length; i++) {
+        let email = String(data[i][1]).trim().toLowerCase();
+        if (!asesores[email]) continue;
+        const rd = _fechaVisitaADate(data[i][0]);
+        if (!rd || rd.getTime() !== ctx.ref.getTime()) continue;
+        _acumular(asesores[email].hoy, String(data[i][4] || '').trim(), parseFloat(data[i][8]) || 0);
+      }
+    }
+    const lista = orden.map(function(em){ const a = asesores[em]; a.hoy.puntos = Math.round(a.hoy.puntos * 100) / 100; return a; });
+    lista.sort(function(a, b){
+      let pa = a.metas.puntos > 0 ? a.hoy.puntos / a.metas.puntos : a.hoy.puntos;
+      let pb = b.metas.puntos > 0 ? b.hoy.puntos / b.metas.puntos : b.hoy.puntos;
+      if (pa !== pb) return pb - pa;
+      return a.alias.localeCompare(b.alias);
+    });
+    return { exito: true, asesores: lista, hoyStr: Utilities.formatDate(new Date(), "GMT-6", "dd/MM/yyyy") };
+  } catch (e) {
+    return { exito: false, mensaje: e.message, asesores: [] };
+  }
+}
+
+// Setup de la Fase 2: crea METAS_USUARIO con la semilla. Correr UNA vez (admin).
+function inicializarFase2() {
+  obtenerHojaMetasUsuario();
+  return { exito: true };
+}
+
 function doGet(e) {
   let html = HtmlService.createTemplateFromFile('Index').evaluate();
   html.setTitle('CRM Ventas CDES');
@@ -209,7 +390,10 @@ function verificarAccesoUsuario(emailLogin, pinLogin) {
         let fechaAhora = Utilities.formatDate(new Date(), "GMT-6", "dd/MM/yyyy HH:mm:ss");
         hojaAjustes.getRange(i + 1, 7).setValue(fechaAhora);
 
-        return { exito: true, email: emailBD, rol: rolBD, alias: aliasBD || emailBD.split('@')[0], metaDiaria: metaBD };
+        // C3: la meta del cockpit es de PUNTOS (METAS_USUARIO), no de clientes.
+        let metaPuntos = obtenerMetasUsuario(emailBD).puntos;
+        if (!(metaPuntos > 0)) metaPuntos = 10;
+        return { exito: true, email: emailBD, rol: rolBD, alias: aliasBD || emailBD.split('@')[0], metaDiaria: metaPuntos };
       }
     }
     return { exito: false, mensaje: "El correo no está registrado en el sistema." };
@@ -223,20 +407,10 @@ function obtenerCockpitDiario(emailUsuario, fechaStrOpcional) {
     const email = String(emailUsuario || "").trim().toLowerCase();
     if (!email) return { exito: false, mensaje: "Email vacío", meta: 10, atendidos: 0 };
 
-    const hojaAjustes = SpreadsheetApp.openById(SHEET_ID_CRM).getSheetByName('USUARIOS_AJUSTES');
-    let meta = 10;
-    if (hojaAjustes) {
-      const datos = hojaAjustes.getDataRange().getDisplayValues();
-      for (let i = 1; i < datos.length; i++) {
-        if (String(datos[i][0]).trim().toLowerCase() === email) {
-          let m = parseInt(String(datos[i][7] || "").trim(), 10);
-          if (!isNaN(m) && m > 0) meta = m;
-          break;
-        }
-      }
-    }
-
-    const atendidos = contarClientesUnicosHoy(email, fechaStrOpcional);
+    // C3: el cockpit mide PUNTOS. Meta = Meta puntos de METAS_USUARIO.
+    const metas = obtenerMetasUsuario(email);
+    const meta = metas.puntos > 0 ? metas.puntos : 10;
+    const atendidos = contarPuntosHoy(email, fechaStrOpcional);
     return { exito: true, meta: meta, atendidos: atendidos };
   } catch (e) {
     return { exito: false, mensaje: e.message, meta: 10, atendidos: 0 };
@@ -278,8 +452,11 @@ function obtenerCockpitsEquipo(fechaStrOpcional) {
     const hojaAjustes = ss.getSheetByName('USUARIOS_AJUSTES');
     if (!hojaAjustes) return { exito: false, mensaje: "No se encontró USUARIOS_AJUSTES", asesores: [] };
 
+    // C3: ranking del equipo por PUNTOS del día contra la Meta puntos de cada quien.
+    const metasMap = obtenerTodasLasMetas();
     const datosUsr = hojaAjustes.getDataRange().getDisplayValues();
     const asesores = [];
+    const idx = {};
     for (let i = 1; i < datosUsr.length; i++) {
       let rol = String(datosUsr[i][1]).trim();
       let estado = String(datosUsr[i][3]).trim();
@@ -287,8 +464,8 @@ function obtenerCockpitsEquipo(fechaStrOpcional) {
       if (rol === 'Admin') continue;
       let email = String(datosUsr[i][0]).trim().toLowerCase();
       let alias = String(datosUsr[i][4]).trim() || email.split('@')[0];
-      let meta = parseInt(String(datosUsr[i][7] || "").trim(), 10);
-      if (isNaN(meta) || meta <= 0) meta = 10;
+      let meta = (metasMap[email] && metasMap[email].puntos > 0) ? metasMap[email].puntos : 10;
+      idx[email] = asesores.length;
       asesores.push({ email: email, alias: alias, meta: meta, atendidos: 0 });
     }
 
@@ -296,28 +473,18 @@ function obtenerCockpitsEquipo(fechaStrOpcional) {
     const hojaVisitas = ss.getSheetByName('VISITAS');
     if (hojaVisitas && hojaVisitas.getLastRow() > 1) {
       const vData = hojaVisitas.getDataRange().getValues();
-      const codigosPorEmail = {};
-
       for (let i = 1; i < vData.length; i++) {
         let fVal = vData[i][0];
         let fStr = (fVal instanceof Date)
           ? Utilities.formatDate(fVal, "GMT-6", "dd/MM/yyyy")
           : String(fVal).trim().substring(0, 10);
         if (fStr !== fechaObjetivo) continue;
-
         let emailFila = String(vData[i][1]).trim().toLowerCase();
-        let cod = String(vData[i][2]).trim().replace(/'/g, "");
-        if (!emailFila || !cod) continue;
-
-        if (!codigosPorEmail[emailFila]) codigosPorEmail[emailFila] = {};
-        codigosPorEmail[emailFila][cod] = true;
+        if (idx[emailFila] === undefined) continue;
+        let p = parseFloat(vData[i][8]);
+        if (!isNaN(p)) asesores[idx[emailFila]].atendidos += p;
       }
-
-      asesores.forEach(function(a) {
-        if (codigosPorEmail[a.email]) {
-          a.atendidos = Object.keys(codigosPorEmail[a.email]).length;
-        }
-      });
+      asesores.forEach(function(a){ a.atendidos = Math.round(a.atendidos * 100) / 100; });
     }
 
     asesores.sort(function(a, b) {
@@ -335,21 +502,11 @@ function obtenerCockpitsEquipo(fechaStrOpcional) {
 
 function obtenerCockpitAgregado(fechaStrOpcional) {
   try {
-    const hojaAjustes = SpreadsheetApp.openById(SHEET_ID_CRM).getSheetByName('USUARIOS_AJUSTES');
+    // C3: meta del equipo = suma de Meta puntos; realizado = suma de puntos del día.
+    const metasMap = obtenerTodasLasMetas();
     let metaTotal = 0;
-    if (hojaAjustes) {
-      const datos = hojaAjustes.getDataRange().getDisplayValues();
-      for (let i = 1; i < datos.length; i++) {
-        let rol = String(datos[i][1]).trim();
-        let estado = String(datos[i][3]).trim();
-        if (estado !== 'Activo') continue;
-        if (rol === 'Admin') continue;
-        let m = parseInt(String(datos[i][7] || "").trim(), 10);
-        if (isNaN(m) || m <= 0) m = 10;
-        metaTotal += m;
-      }
-    }
-    const atendidos = contarClientesUnicosHoy(null, fechaStrOpcional);
+    Object.keys(metasMap).forEach(function(em){ metaTotal += (metasMap[em].puntos > 0 ? metasMap[em].puntos : 10); });
+    const atendidos = contarPuntosHoy(null, fechaStrOpcional);
     return { exito: true, meta: metaTotal || 10, atendidos: atendidos };
   } catch (e) {
     return { exito: false, mensaje: e.message, meta: 10, atendidos: 0 };

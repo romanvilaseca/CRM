@@ -86,7 +86,7 @@
                 </div>
 
                 <div id="cockpit-tile" class="bg-white/5 p-3 md:p-4 rounded-3xl border border-white/10 backdrop-blur-md flex flex-col items-center justify-center">
-                    <p id="cockpit-label" class="text-[9px] text-blue-400 font-black uppercase mb-1 text-center">Mi Meta Hoy</p>
+                    <p id="cockpit-label" class="text-[9px] text-blue-400 font-black uppercase mb-1 text-center">Mis Puntos Hoy</p>
                     <div class="relative w-16 h-16 md:w-20 md:h-20">
                         <svg class="w-full h-full -rotate-90" viewBox="0 0 36 36">
                             <circle cx="18" cy="18" r="15.915" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="3"/>
@@ -329,6 +329,16 @@
                 <div class="absolute top-0 right-0 w-32 h-32 bg-blue-500 rounded-full mix-blend-multiply filter blur-2xl opacity-50 animate-pulse"></div>
                 <h2 id="titulo-auditoria" class="text-3xl font-black tracking-tighter mb-2 relative z-10">Módulo de Auditoría</h2>
                 <p id="subtitulo-auditoria" class="text-xs text-slate-400 font-bold uppercase tracking-widest relative z-10">Supervisión Estratégica de Cartera</p>
+            </div>
+
+            <!-- FASE 2: Panel de rendimiento por puntos (vendedor: sus 4 metas | admin: equipo) -->
+            <div id="panel-rendimiento" class="bg-white p-6 rounded-[30px] border border-slate-200 shadow-sm mb-8 hidden">
+                <div class="flex items-center gap-2 mb-4">
+                    <span class="text-lg">🎯</span>
+                    <h3 id="rend-titulo" class="text-sm font-black text-slate-800">Mi Rendimiento</h3>
+                    <span id="rend-sub" class="text-[10px] font-bold text-slate-400 uppercase tracking-widest"></span>
+                </div>
+                <div id="rend-contenido" class="text-center text-xs text-slate-400 py-6 animate-pulse">Calculando…</div>
             </div>
 
             <div id="bloque-fecha-admin" class="bg-slate-900 text-white p-5 rounded-[30px] shadow-md mb-6 hidden">
@@ -886,6 +896,7 @@
             document.getElementById('vista-reportes').classList.remove('hidden');
             document.getElementById('tab-reportes').classList.add('bg-slate-900', 'text-white', 'shadow-md');
             document.getElementById('tab-reportes').classList.remove('text-slate-600', 'bg-slate-100');
+            cargarRendimiento();
             if(usuarioRol === 'Admin') {
                 fetchEstadoUsuarios();
                 document.getElementById('bloque-fecha-admin').classList.remove('hidden');
@@ -899,6 +910,81 @@
             }
             if(DATA_VISITAS_ADMIN.length === 0) fetchVisitasAdmin();
         }
+    }
+
+    // ===== FASE 2: panel de rendimiento por puntos =====
+    function cargarRendimiento() {
+        const cont = document.getElementById('rend-contenido');
+        const panel = document.getElementById('panel-rendimiento');
+        if (!panel || !cont) return;
+        panel.classList.remove('hidden');
+        cont.innerHTML = '<p class="text-center text-xs text-slate-400 py-6 animate-pulse">Calculando…</p>';
+        if (usuarioRol === 'Admin') {
+            document.getElementById('rend-titulo').innerText = 'Rendimiento del Equipo';
+            document.getElementById('rend-sub').innerText = 'Puntos de hoy vs meta';
+            const fechaAdmin = FECHA_ADMIN_SEL ? yyyymmddToDdmmyyyy(FECHA_ADMIN_SEL) : null;
+            google.script.run.withSuccessHandler(function(res){
+                if(!res || !res.exito){ cont.innerHTML='<p class="text-center text-xs text-rose-400 py-4">No se pudo cargar el rendimiento.</p>'; return; }
+                cont.innerHTML = renderEquipo(res.asesores);
+            }).withFailureHandler(function(){ cont.innerHTML='<p class="text-center text-xs text-rose-400 py-4">Error de red.</p>'; })
+              .obtenerRendimientoEquipo(fechaAdmin);
+        } else {
+            document.getElementById('rend-titulo').innerText = 'Mi Rendimiento';
+            document.getElementById('rend-sub').innerText = 'Hoy · Semana · Mes';
+            const fechaUsr = FECHA_USUARIO_SEL ? yyyymmddToDdmmyyyy(FECHA_USUARIO_SEL) : null;
+            google.script.run.withSuccessHandler(function(res){
+                if(!res || !res.exito){ cont.innerHTML='<p class="text-center text-xs text-rose-400 py-4">No se pudo cargar tu rendimiento.</p>'; return; }
+                cont.innerHTML = renderRendimientoUsuario(res);
+            }).withFailureHandler(function(){ cont.innerHTML='<p class="text-center text-xs text-rose-400 py-4">Error de red.</p>'; })
+              .obtenerRendimientoUsuario(usuarioLogueado, fechaUsr);
+        }
+    }
+
+    function _indCard(nombre, emoji, hoy, sem, mes, meta) {
+        let pct = meta > 0 ? Math.round((hoy/meta)*100) : null;
+        let cumplido = (meta > 0 && hoy >= meta);
+        let color = !meta ? 'text-slate-500' : cumplido ? 'text-emerald-600' : (pct>=50?'text-amber-500':'text-rose-500');
+        let badge = !meta ? '<span class="text-[8px] font-bold text-slate-300 uppercase">sin meta</span>'
+                  : cumplido ? '<span class="text-[8px] font-black text-emerald-600 uppercase">✓ cumplida</span>'
+                  : '<span class="text-[8px] font-black '+color+' uppercase">'+pct+'%</span>';
+        let metaTxt = meta > 0 ? (' / ' + meta) : '';
+        return '<div class="bg-slate-50 border border-slate-200 rounded-2xl p-3 text-center">'
+            + '<p class="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">'+emoji+' '+nombre+'</p>'
+            + '<p class="text-lg font-black '+color+' leading-none">'+hoy+'<span class="text-[10px] text-slate-400">'+metaTxt+'</span></p>'
+            + '<div class="mt-1 h-3">'+badge+'</div>'
+            + '<p class="text-[8px] text-slate-400 font-bold mt-2">Sem '+sem+' · Mes '+mes+'</p>'
+            + '</div>';
+    }
+
+    function renderRendimientoUsuario(res){
+        const h=res.hoy, s=res.semana, m=res.mes, meta=res.metas;
+        return '<div class="grid grid-cols-2 md:grid-cols-4 gap-3">'
+            + _indCard('Puntos','⭐', h.puntos, s.puntos, m.puntos, meta.puntos)
+            + _indCard('Llamadas','📞', h.llamadas, s.llamadas, m.llamadas, meta.llamadas)
+            + _indCard('WhatsApp','📱', h.whatsapp, s.whatsapp, m.whatsapp, meta.whatsapp)
+            + _indCard('Visitas','🚗', h.visitas, s.visitas, m.visitas, meta.visitas)
+            + '</div>';
+    }
+
+    function renderEquipo(asesores){
+        if(!asesores || !asesores.length) return '<p class="text-center text-xs text-slate-400 py-4">Sin asesores.</p>';
+        let filas = asesores.map(function(a){
+            let pct = a.metas.puntos>0 ? Math.round((a.hoy.puntos/a.metas.puntos)*100) : 0;
+            let cumplido = a.metas.puntos>0 && a.hoy.puntos>=a.metas.puntos;
+            let col = cumplido?'text-emerald-600':(pct>=50?'text-amber-500':'text-rose-500');
+            return '<tr class="border-b border-slate-100">'
+                + '<td class="py-2 px-2 font-bold text-slate-700 text-xs">'+a.alias+'</td>'
+                + '<td class="py-2 px-2 text-center font-black '+col+' text-xs">'+a.hoy.puntos+' / '+a.metas.puntos+' <span class="text-[9px]">('+pct+'%)</span></td>'
+                + '<td class="py-2 px-2 text-center text-xs text-slate-600">'+a.hoy.llamadas+(a.metas.llamadas>0?(' / '+a.metas.llamadas):'')+'</td>'
+                + '<td class="py-2 px-2 text-center text-xs text-slate-600">'+a.hoy.whatsapp+(a.metas.whatsapp>0?(' / '+a.metas.whatsapp):'')+'</td>'
+                + '<td class="py-2 px-2 text-center text-xs text-slate-600">'+a.hoy.visitas+(a.metas.visitas>0?(' / '+a.metas.visitas):'')+'</td>'
+                + '</tr>';
+        }).join('');
+        return '<div class="overflow-x-auto"><table class="w-full text-left">'
+            + '<thead><tr class="text-[9px] text-slate-400 uppercase tracking-widest border-b border-slate-200">'
+            + '<th class="py-2 px-2">Asesor</th><th class="py-2 px-2 text-center">Puntos</th><th class="py-2 px-2 text-center">Llam.</th><th class="py-2 px-2 text-center">WA</th><th class="py-2 px-2 text-center">Visitas</th></tr></thead>'
+            + '<tbody>'+filas+'</tbody></table>'
+            + '<p class="text-[9px] text-slate-400 mt-3">Edita las metas en la hoja <b>METAS_USUARIO</b>. "—" = sin meta definida.</p></div>';
     }
 
     function actualizarDashboard() {
@@ -1027,9 +1113,9 @@
     function renderTimelineUsuario(data) {
         const esHoy = data.esHoy !== false;
         document.getElementById('timeline-titulo').innerText = esHoy ? 'Mi Día' : 'Día ' + (data.fecha || '');
-        document.getElementById('cockpit-label').innerText = esHoy ? 'Mi Meta Hoy' : 'Meta del ' + (data.fecha || '').substring(0, 5);
+        document.getElementById('cockpit-label').innerText = esHoy ? 'Mis Puntos Hoy' : 'Puntos del ' + (data.fecha || '').substring(0, 5);
 
-        document.getElementById('timeline-resumen').innerText = (data.visitas.length || 0) + ' interacciones · ' + (data.total || 0) + '/' + metaDiariaUsuario + ' clientes';
+        document.getElementById('timeline-resumen').innerText = (data.visitas.length || 0) + ' interacciones · ' + (data.total || 0) + ' clientes únicos';
 
         const ultEl = document.getElementById('timeline-ultima');
         if (!esHoy) {
@@ -2572,8 +2658,8 @@
                 if (!document.getElementById('vista-reportes').classList.contains('hidden')) {
                     cargarTimelinesEquipo();
                 }
-            } else if (res && typeof res.atendidosHoy === 'number') {
-                atendidosHoyUsuario = res.atendidosHoy;
+            } else if (res && typeof res.puntosHoy === 'number') {
+                atendidosHoyUsuario = res.puntosHoy;
                 actualizarCockpit(atendidosHoyUsuario, metaDiariaUsuario);
                 cargarTimelineUsuario();
             } else {
@@ -2581,7 +2667,9 @@
                 cargarTimelineUsuario();
             }
 
+            // Refresca el panel de rendimiento si la vista Resumen está abierta.
             if(document.getElementById('vista-reportes').classList.contains('hidden') === false) {
+                cargarRendimiento();
                 fetchVisitasAdmin();
             }
 
