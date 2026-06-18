@@ -1897,6 +1897,71 @@ function obtenerResumenDemanda() {
   }
 }
 
+// Detalle de la demanda no cubierta CON el vendedor que la documentó (más reciente primero).
+function obtenerDemandaDetalle() {
+  try {
+    const h = obtenerHojaDemanda();
+    if (h.getLastRow() <= 1) return { exito: true, items: [] };
+    const aliasMap = getAliasMap();
+    const data = h.getDataRange().getValues();
+    const items = [];
+    for (let i = 1; i < data.length; i++) {
+      let producto = String(data[i][4] || '').trim();
+      if (!producto) continue;
+      let email = String(data[i][1] || '').trim().toLowerCase();
+      items.push({
+        fecha: (data[i][0] instanceof Date) ? Utilities.formatDate(data[i][0], "GMT-6", "dd/MM/yyyy") : String(data[i][0]).substring(0, 10),
+        vendedor: aliasMap[email] || (email ? email.split('@')[0] : 'Desconocido'),
+        codigo: String(data[i][2] || ''),
+        cliente: String(data[i][3] || ''),
+        producto: producto,
+        marca: String(data[i][5] || ''),
+        cantidad: String(data[i][6] || '')
+      });
+    }
+    items.reverse();
+    return { exito: true, items: items };
+  } catch (e) {
+    return { exito: false, mensaje: e.message, items: [] };
+  }
+}
+
+// Tres listados de gestión para el admin, en UNA sola pasada (reusa obtenerMisClientes):
+//  - sinContacto: clientes con >=3 intentos sin respuesta (teléfono sospechoso)
+//  - enRiesgo: Clase A que compró el año pasado pero $0 este año
+//  - abandonada: clientes sin ninguna interacción efectiva este mes
+function obtenerListadosAdmin() {
+  try {
+    const base = obtenerMisClientes();
+    if (!base.exito) return { exito: false, mensaje: base.mensaje };
+    const clientes = base.clientes || [];
+    const sinContacto = [], enRiesgo = [], abandonada = [];
+    clientes.forEach(function(c) {
+      if ((c.noRespuestaCount || 0) >= 3) {
+        sinContacto.push({ codigo: c.codigo, nombre: c.nombre, vend: c.vend, tel: c.tel, intentos: c.noRespuestaCount });
+      }
+      if (c.enRiesgo) {
+        enRiesgo.push({ codigo: c.codigo, nombre: c.nombre, vend: c.vend, tel: c.tel, monto: Math.round(c.montoHistorico || 0), clase: c.clase });
+      }
+      if (!c.contactado) {
+        abandonada.push({ codigo: c.codigo, nombre: c.nombre, vend: c.vend, tel: c.tel, monto: Math.round(c.montoHistorico || 0), clase: c.clase });
+      }
+    });
+    sinContacto.sort(function(a, b) { return b.intentos - a.intentos; });
+    enRiesgo.sort(function(a, b) { return b.monto - a.monto; });
+    abandonada.sort(function(a, b) { return b.monto - a.monto; });
+    return {
+      exito: true,
+      sinContacto: sinContacto,
+      enRiesgo: enRiesgo,
+      abandonada: abandonada.slice(0, 300),
+      conteos: { sinContacto: sinContacto.length, enRiesgo: enRiesgo.length, abandonada: abandonada.length }
+    };
+  } catch (e) {
+    return { exito: false, mensaje: e.message };
+  }
+}
+
 // Setup Fases 3 y 4: crea las hojas. Correr UNA vez (admin) o se crean solas al primer uso.
 function inicializarFase34() {
   obtenerHojaCorrecciones();
