@@ -1,2 +1,4 @@
 node_modules/
 .compare_backup/
+CONTEXTO_ANALISIS_VISITAS.txt
+.tmp_*
