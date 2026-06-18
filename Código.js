@@ -1912,6 +1912,15 @@ function guardarVisita(d, correoVendedor) {
       notas: d.comentario
     }, correoVendedor);
   }
+  // Reincidencia: el cliente ya tenía 3+ intentos sin respuesta y el vendedor vuelve a marcar
+  // "sin contacto". Registra/actualiza una alerta para que el admin se entere automáticamente.
+  if (resultado === 'No se obtuvo contacto' && (parseInt(d.intentosPrevios, 10) || 0) >= 3) {
+    registrarAlertaReincidencia({
+      codigo: d.codigo,
+      nombre: d.nombre,
+      intentos: (parseInt(d.intentosPrevios, 10) || 0) + 1
+    }, correoVendedor);
+  }
 
   const atendidosHoy = contarClientesUnicosHoy(correoVendedor);
   const puntosHoy = contarPuntosHoy(correoVendedor);
@@ -2006,6 +2015,72 @@ function obtenerTareasSAP() {
     return { exito: true, tareas: tareas };
   } catch (e) {
     return { exito: false, mensaje: e.message, tareas: [] };
+  }
+}
+
+// ---- Alertas de reincidencia: vendedor que intenta marcar otro "sin contacto"
+//      en un cliente con 3+ intentos sin corregir el teléfono. Una fila por cliente (upsert). ----
+const ALERTAS_HEADERS = ['Código cliente', 'Cliente', 'Intentos sin respuesta', 'Veces bloqueado', 'Último vendedor', 'Última vez', 'Estado'];
+
+function obtenerHojaAlertas() {
+  const ss = SpreadsheetApp.openById(SHEET_ID_CRM);
+  let h = ss.getSheetByName('ALERTAS_CONTACTO');
+  if (!h) {
+    h = ss.insertSheet('ALERTAS_CONTACTO');
+    h.appendRow(ALERTAS_HEADERS);
+    h.setFrozenRows(1);
+    h.getRange(1, 1, 1, ALERTAS_HEADERS.length).setFontWeight('bold');
+    h.setColumnWidth(2, 220);
+  }
+  return h;
+}
+
+function registrarAlertaReincidencia(d, correoVendedor) {
+  try {
+    const h = obtenerHojaAlertas();
+    const cod = String(d.codigo || '').trim().replace(/'/g, '');
+    if (!cod) return { exito: false };
+    const alias = getAliasMap();
+    const vend = alias[String(correoVendedor || '').trim().toLowerCase()] || String(correoVendedor || '').split('@')[0];
+    const ahora = Utilities.formatDate(new Date(), "GMT-6", "dd/MM/yyyy HH:mm");
+    const intentos = parseInt(d.intentos, 10) || 0;
+    const data = h.getDataRange().getValues();
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]).trim().replace(/'/g, '') === cod && String(data[i][6] || '').trim() !== 'Resuelto') {
+        let veces = (parseInt(data[i][3], 10) || 0) + 1;
+        h.getRange(i + 1, 3, 1, 5).setValues([[intentos, veces, vend, ahora, 'Pendiente']]);
+        return { exito: true, veces: veces };
+      }
+    }
+    h.appendRow([cod, String(d.nombre || '').trim(), intentos, 1, vend, ahora, 'Pendiente']);
+    return { exito: true, veces: 1 };
+  } catch (e) {
+    return { exito: false, mensaje: e.message };
+  }
+}
+
+function obtenerAlertasReincidencia() {
+  try {
+    const h = obtenerHojaAlertas();
+    if (h.getLastRow() <= 1) return { exito: true, alertas: [] };
+    const data = h.getDataRange().getValues();
+    const alertas = [];
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][6] || '').trim() === 'Resuelto') continue;
+      if (!String(data[i][0]).trim()) continue;
+      alertas.push({
+        codigo: String(data[i][0]).trim().replace(/'/g, ''),
+        cliente: String(data[i][1] || ''),
+        intentos: parseInt(data[i][2], 10) || 0,
+        veces: parseInt(data[i][3], 10) || 0,
+        vendedor: String(data[i][4] || ''),
+        ultima: (data[i][5] instanceof Date) ? Utilities.formatDate(data[i][5], "GMT-6", "dd/MM/yyyy HH:mm") : String(data[i][5] || '')
+      });
+    }
+    alertas.sort(function(a, b){ return b.veces - a.veces; });
+    return { exito: true, alertas: alertas };
+  } catch (e) {
+    return { exito: false, mensaje: e.message, alertas: [] };
   }
 }
 

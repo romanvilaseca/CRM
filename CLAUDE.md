@@ -32,14 +32,16 @@ Meta diaria fijada en **30 puntos** para todos (editable por vendedor). El cockp
 - `obtenerRendimientoUsuario/Equipo`, `obtenerDesglosePuntosDia`, `generarDesglosePuntosPDF`.
 - `obtenerListadosAdmin` (sin contacto / en riesgo / cartera abandonada en una pasada, reusa `obtenerMisClientes`), `obtenerDemandaDetalle`, `obtenerTareasSAP`, `obtenerResumenDemanda`.
 - Metas: `obtenerMetasEquipo`, `guardarMetasUsuario`, `ajustarMetaPuntosTodos`.
+- Reincidencias: `registrarAlertaReincidencia`/`obtenerAlertasReincidencia` (hoja `ALERTAS_CONTACTO`, upsert por cliente). Tras 3+ "No se obtuvo contacto" el frontend obliga a corregir contacto; al guardar, `guardarVisita` levanta la alerta (recibe `intentosPrevios` del frontend). Panel admin "🔁 Reincidencias de contacto". No retroactivo.
 - Setup idempotente: `inicializarFase1/2/34`, `migrarResultadosHistoricos` (backfill, marca `inferido`).
 
 ## Despliegue (IMPORTANTE)
 - `clasp run` NO funciona (proyecto usa GCP por defecto; requiere habilitar API en navegador). Ver memoria `crm-deploy-clasp-process`.
 - Para correr funciones de servidor una vez: técnica de **disparador temporal en doGet + despliegue web temporal + curl + borrar**.
-- Publicar a usuarios: `clasp create-version` → `clasp update-deployment <ID @96> --versionNumber N`. El deployment publicado (la URL que usan los 8) es `AKfycbzHuce-FNFVOD0Yq2vbyHbokzAELgsDRIp7zwwPbRVZWtGwBV0adgpsGas9KlaTXGwEVw`.
+- Publicar a usuarios: `clasp create-version` → `clasp update-deployment <ID> --versionNumber N`. El deployment publicado (la URL que usan los 8) es `AKfycbzHuce-FNFVOD0Yq2vbyHbokzAELgsDRIp7zwwPbRVZWtGwBV0adgpsGas9KlaTXGwEVw` (última versión publicada **@114**). Probar antes: deployment @HEAD `AKfycby_YSlZF2UKH8fkKSjmhFaLxzmSeYQ_8SLHyUbvqGzz` (URL /dev). El sitio `www.corpodent.net/crm` carga el deployment publicado en un **iframe** (probar /dev requiere abrirlo directo, no por el iframe).
 - Verificar en vivo: `curl .../exec?cb=<random>` (usar cache-buster; el borde de Google cachea tras redeploy).
 - GitHub: `https://github.com/romanvilaseca/CRM.git` (rama `main`). Identidad git: `Roman Vilaseca <romanvilaseca@gmail.com>`.
 
 ## Pendiente conocido
-Las interacciones registradas con el formulario viejo (antes de publicar Fase 1) quedaron con Resultado vacío = 0 pts. Se puede correr una reclasificación si se desea.
+- Las interacciones registradas con el formulario viejo (antes de publicar Fase 1) quedaron con Resultado vacío = 0 pts. Se puede correr una reclasificación si se desea.
+- Hoja VENTAS: la columna **"Fecha Contab." tiene formato mezclado** — filas viejas como texto `dd/MM/yyyy`, filas recientes como número de serie de fecha (ej. `45705` = 17/02/2025). El valor es correcto; solo afecta reportes de ventas por fecha. Pendiente normalizar la columna a fecha real si se requiere. No afecta cockpit/puntos (usan VISITAS).

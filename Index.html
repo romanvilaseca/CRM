@@ -401,6 +401,15 @@
                 <div class="bg-white rounded-[25px] border border-slate-200 shadow-sm overflow-hidden">
                     <details>
                         <summary class="p-4 cursor-pointer flex items-center justify-between list-none hover:bg-slate-50">
+                            <span class="text-sm font-black text-slate-800">🔁 Reincidencias de contacto</span>
+                            <span id="lst-reincidencia-cnt" class="text-[10px] font-black text-fuchsia-600 bg-fuchsia-50 px-2 py-1 rounded-full">0</span>
+                        </summary>
+                        <div class="px-4 pb-4"><p class="text-[10px] text-slate-400 mb-2">Clientes que, tras 3+ intentos sin respuesta, el vendedor volvió a reportar sin contacto. Revisar y corregir el teléfono.</p><div id="lst-reincidencia" class="max-h-80 overflow-y-auto text-xs">Cargando…</div></div>
+                    </details>
+                </div>
+                <div class="bg-white rounded-[25px] border border-slate-200 shadow-sm overflow-hidden">
+                    <details>
+                        <summary class="p-4 cursor-pointer flex items-center justify-between list-none hover:bg-slate-50">
                             <span class="text-sm font-black text-slate-800">📦 Demanda no cubierta (con vendedor)</span>
                             <span id="lst-demanda-cnt" class="text-[10px] font-black text-amber-600 bg-amber-50 px-2 py-1 rounded-full">0</span>
                         </summary>
@@ -2952,6 +2961,7 @@
             comentario: nota,
             gps: gps,
             resultado: resultado,
+            intentosPrevios: (function(){ var c = DATA.find(function(x){ return x.codigo === codCliente; }); return c ? (c.noRespuestaCount || 0) : 0; })(),
             demanda: (resultado === 'Producto no disponible (sin stock)') ? {
                 producto: (document.getElementById('dem-producto').value || '').trim(),
                 marca: (document.getElementById('dem-marca').value || '').trim(),
@@ -3149,6 +3159,23 @@
             }).join('') : '<p class="text-slate-400 py-3 text-center">Sin registros aún.</p>';
         }).withFailureHandler(function(){ dem.innerHTML = '<p class="text-rose-400 py-3 text-center">Error de red.</p>'; })
           .obtenerDemandaDetalle();
+
+        // Reincidencias de contacto (alertas automáticas)
+        const rei = document.getElementById('lst-reincidencia');
+        if(rei) rei.innerHTML = '<p class="text-slate-400 py-3 text-center animate-pulse">Cargando…</p>';
+        google.script.run.withSuccessHandler(function(res){
+            if(!res || !res.exito){ if(rei) rei.innerHTML = '<p class="text-rose-400 py-3 text-center">No se pudo cargar.</p>'; return; }
+            const al = res.alertas || [];
+            document.getElementById('lst-reincidencia-cnt').innerText = al.length;
+            rei.innerHTML = al.length ? al.map(function(x){
+                return '<div class="border-b border-slate-100 py-2">'
+                    + '<div class="flex items-center justify-between gap-2"><span class="font-bold text-slate-800 truncate">'+x.cliente+'</span><span class="text-[10px] text-slate-400 whitespace-nowrap">'+x.ultima+'</span></div>'
+                    + '<p class="text-[10px] text-slate-500">'+x.codigo+' · <span class="text-fuchsia-600 font-bold">'+x.intentos+' intentos sin respuesta</span> · bloqueado '+x.veces+'×</p>'
+                    + '<p class="text-[10px] text-slate-400">👤 último: '+x.vendedor+'</p>'
+                    + '</div>';
+            }).join('') : '<p class="text-slate-400 py-3 text-center">Sin reincidencias. 🎉</p>';
+        }).withFailureHandler(function(){ if(rei) rei.innerHTML = '<p class="text-rose-400 py-3 text-center">Error de red.</p>'; })
+          .obtenerAlertasReincidencia();
     }
 
     // ===== FASES 3 y 4: paneles de admin =====
