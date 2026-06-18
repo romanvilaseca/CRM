@@ -862,7 +862,12 @@
               <button onclick="cerrarDesglose()" class="text-slate-400 hover:text-slate-700 text-2xl font-black leading-none">&times;</button>
           </div>
           <p id="desg-sub" class="text-[11px] text-slate-400 mb-4">—</p>
-          <div id="desg-kpis" class="grid grid-cols-3 gap-2 mb-5"></div>
+          <div id="desg-kpis" class="grid grid-cols-3 gap-2 mb-4"></div>
+          <div class="bg-slate-50 border border-slate-200 rounded-2xl p-3 mb-5 flex flex-wrap items-end gap-2">
+              <div><label class="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1">Desde</label><input type="date" id="desg-desde" class="text-[11px] font-bold text-slate-700 bg-white border border-slate-200 rounded-xl px-2 py-1.5 outline-none"></div>
+              <div><label class="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1">Hasta</label><input type="date" id="desg-hasta" class="text-[11px] font-bold text-slate-700 bg-white border border-slate-200 rounded-xl px-2 py-1.5 outline-none"></div>
+              <button id="btn-desg-pdf" onclick="exportarDesglosePDF()" class="ml-auto bg-rose-600 text-white px-4 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-rose-700 active:scale-95 transition-all">📄 Exportar PDF</button>
+          </div>
           <div id="desg-contenido" class="text-center text-xs text-slate-400 py-6 animate-pulse">Cargando…</div>
       </div>
   </div>
@@ -2933,18 +2938,39 @@
     }
 
     // ===== Drill-down: desglose de puntos por vendedor (admin) =====
+    let DESG_EMAIL = null;
     function abrirDesglose(email) {
+        DESG_EMAIL = email;
         const m = document.getElementById('modal-desglose');
         m.classList.remove('opacity-0', 'pointer-events-none');
         m.children[0].classList.remove('scale-95');
         document.getElementById('desg-kpis').innerHTML = '';
         document.getElementById('desg-contenido').innerHTML = '<p class="text-center text-xs text-slate-400 py-6 animate-pulse">Cargando…</p>';
+        // Rango del PDF por defecto: del día 1 del mes a hoy.
+        const hoy = hoyYYYYMMDD();
+        document.getElementById('desg-desde').value = hoy.substring(0, 8) + '01';
+        document.getElementById('desg-hasta').value = hoy;
         const fecha = FECHA_ADMIN_SEL ? yyyymmddToDdmmyyyy(FECHA_ADMIN_SEL) : null;
         google.script.run.withSuccessHandler(function(res){
             if(!res || !res.exito){ document.getElementById('desg-contenido').innerHTML = '<p class="text-center text-xs text-rose-400 py-6">No se pudo cargar.</p>'; return; }
             renderDesglose(res);
         }).withFailureHandler(function(){ document.getElementById('desg-contenido').innerHTML = '<p class="text-center text-xs text-rose-400 py-6">Error de red.</p>'; })
           .obtenerDesglosePuntosDia(email, fecha);
+    }
+
+    function exportarDesglosePDF() {
+        if(!DESG_EMAIL){ alert('Abre primero el desglose de un vendedor.'); return; }
+        const desde = document.getElementById('desg-desde').value;
+        const hasta = document.getElementById('desg-hasta').value;
+        if(!desde || !hasta){ alert('Selecciona el rango de fechas.'); return; }
+        const btn = document.getElementById('btn-desg-pdf');
+        btn.innerText = 'Generando…'; btn.disabled = true;
+        google.script.run.withSuccessHandler(function(res){
+            btn.innerText = '📄 Exportar PDF'; btn.disabled = false;
+            if(res && res.exito){ window.open(res.url, '_blank'); }
+            else alert((res && res.mensaje) ? res.mensaje : 'No se pudo generar el PDF.');
+        }).withFailureHandler(function(){ btn.innerText = '📄 Exportar PDF'; btn.disabled = false; alert('Error de red al generar el PDF.'); })
+          .generarDesglosePuntosPDF(DESG_EMAIL, desde, hasta);
     }
 
     function cerrarDesglose() {
@@ -2971,8 +2997,9 @@
         let detalle = d.filas.length ? ('<p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Detalle ('+d.totalInteracciones+' interacciones)</p><div class="max-h-72 overflow-y-auto">'
             + d.filas.map(function(f){
                 let c = f.puntos>=3?'text-emerald-600':(f.puntos>0?'text-blue-600':'text-slate-300');
+                let cli = f.cliente ? (' · ' + f.cliente) : '';
                 return '<div class="flex items-center justify-between border-b border-slate-100 py-1.5">'
-                    + '<div class="min-w-0"><span class="text-[11px] font-bold text-slate-700">'+f.hora+' · '+f.cod+'</span><span class="text-[10px] text-slate-400 block truncate">'+f.tipo+' → '+f.resultado+'</span></div>'
+                    + '<div class="min-w-0"><span class="text-[11px] font-bold text-slate-700">'+f.hora+' · '+f.cod+cli+'</span><span class="text-[10px] text-slate-400 block truncate">'+f.tipo+' → '+f.resultado+'</span></div>'
                     + '<span class="text-xs font-black '+c+' ml-2 whitespace-nowrap">'+f.puntos+' pts</span>'
                     + '</div>';
             }).join('') + '</div>') : '<p class="text-center text-xs text-slate-400 py-4">Sin interacciones ese día.</p>';

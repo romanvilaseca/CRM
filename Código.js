@@ -480,6 +480,93 @@ function obtenerDesglosePuntosDia(email, fechaStrOpcional) {
   }
 }
 
+// Genera un PDF del desglose de puntos de un vendedor en un rango de fechas (admin).
+function generarDesglosePuntosPDF(email, iniYYYYMMDD, finYYYYMMDD) {
+  try {
+    const em = String(email || '').trim().toLowerCase();
+    if (!em) return { exito: false, mensaje: 'Vendedor vacío.' };
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(iniYYYYMMDD) || !/^\d{4}-\d{2}-\d{2}$/.test(finYYYYMMDD)) {
+      return { exito: false, mensaje: 'Fechas inválidas (use el selector).' };
+    }
+    const ini = new Date(iniYYYYMMDD + 'T00:00:00');
+    const fin = new Date(finYYYYMMDD + 'T23:59:59');
+    if (ini > fin) return { exito: false, mensaje: 'La fecha inicial es posterior a la final.' };
+    const iniDay = new Date(ini.getFullYear(), ini.getMonth(), ini.getDate());
+    const finDay = new Date(fin.getFullYear(), fin.getMonth(), fin.getDate());
+
+    const alias = getAliasMap();
+    const metas = obtenerMetasUsuario(em);
+    const ss = SpreadsheetApp.openById(SHEET_ID_CRM);
+    const h = ss.getSheetByName('VISITAS');
+    const porResultado = {}, porDia = {};
+    let total = 0, inter = 0;
+    if (h && h.getLastRow() > 1) {
+      const data = h.getDataRange().getValues();
+      for (let i = 1; i < data.length; i++) {
+        if (String(data[i][1] || '').trim().toLowerCase() !== em) continue;
+        const rd = _fechaVisitaADate(data[i][0]);
+        if (!rd) continue;
+        if (rd.getTime() < iniDay.getTime() || rd.getTime() > finDay.getTime()) continue;
+        let pts = parseFloat(data[i][8]); if (isNaN(pts)) pts = 0;
+        let resultado = String(data[i][7] || '').trim() || '(sin resultado)';
+        let diaStr = Utilities.formatDate(rd, "GMT-6", "dd/MM/yyyy");
+        if (!porResultado[resultado]) porResultado[resultado] = { veces: 0, unit: pts, sub: 0 };
+        porResultado[resultado].veces++; porResultado[resultado].sub += pts;
+        if (!porDia[diaStr]) porDia[diaStr] = { pts: 0, inter: 0, orden: rd.getTime() };
+        porDia[diaStr].pts += pts; porDia[diaStr].inter++;
+        total += pts; inter++;
+      }
+    }
+    if (inter === 0) return { exito: false, mensaje: 'No hay interacciones de ese vendedor en el rango.' };
+
+    const nombre = alias[em] || em.split('@')[0];
+    const rangoTxt = formatearDDMMYYYY(ini) + ' al ' + formatearDDMMYYYY(fin);
+    const resArr = Object.keys(porResultado).map(function(k){ return { r: k, v: porResultado[k].veces, u: porResultado[k].unit, s: Math.round(porResultado[k].sub * 100) / 100 }; }).sort(function(a, b){ return b.s - a.s; });
+    const diasArr = Object.keys(porDia).map(function(k){ return { dia: k, pts: Math.round(porDia[k].pts * 100) / 100, inter: porDia[k].inter, orden: porDia[k].orden }; }).sort(function(a, b){ return a.orden - b.orden; });
+    const diasActivos = diasArr.length;
+    const promedio = diasActivos > 0 ? Math.round((total / diasActivos) * 10) / 10 : 0;
+
+    const filasRes = resArr.map(function(x){ return '<tr><td>' + x.r + '</td><td style="text-align:center;">' + x.v + '</td><td style="text-align:center;color:#94a3b8;">' + x.u + '</td><td style="text-align:right;font-weight:900;">' + x.s + '</td></tr>'; }).join('');
+    const filasDia = diasArr.map(function(x){ return '<tr><td>' + x.dia + '</td><td style="text-align:center;">' + x.inter + '</td><td style="text-align:right;font-weight:900;color:#1d4ed8;">' + x.pts + '</td></tr>'; }).join('');
+
+    const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><style>'
+      + '@page { margin: 18mm 14mm; } body{font-family:Arial,sans-serif;color:#0f172a;}'
+      + 'h1{font-size:22px;margin:0 0 2px 0;} .sub{color:#64748b;font-size:11px;text-transform:uppercase;letter-spacing:2px;font-weight:700;margin-bottom:18px;}'
+      + '.kpis{display:flex;gap:10px;margin-bottom:20px;} .kpi{background:#0f172a;color:#fff;border-radius:14px;padding:12px 16px;flex:1;text-align:center;}'
+      + '.kpi b{font-size:22px;display:block;} .kpi span{font-size:8px;letter-spacing:1.5px;text-transform:uppercase;color:#94a3b8;}'
+      + 'h3{font-size:11px;text-transform:uppercase;letter-spacing:2px;color:#475569;margin:18px 0 6px;}'
+      + 'table{width:100%;border-collapse:collapse;font-size:11px;} th{background:#1e293b;color:#fff;padding:8px;text-align:left;font-size:9px;text-transform:uppercase;letter-spacing:1px;}'
+      + 'td{padding:7px 8px;border-bottom:1px solid #e2e8f0;} .footer{margin-top:20px;font-size:9px;color:#94a3b8;text-align:center;text-transform:uppercase;letter-spacing:2px;}'
+      + '</style></head><body>'
+      + '<h1>Desglose de Puntos</h1>'
+      + '<p class="sub">CRM CDES &middot; ' + nombre + ' &middot; ' + rangoTxt + '</p>'
+      + '<div class="kpis">'
+      + '<div class="kpi"><b>' + (Math.round(total * 100) / 100) + '</b><span>Puntos totales</span></div>'
+      + '<div class="kpi"><b>' + inter + '</b><span>Interacciones</span></div>'
+      + '<div class="kpi"><b>' + diasActivos + '</b><span>Días activos</span></div>'
+      + '<div class="kpi"><b>' + promedio + '</b><span>Promedio/día</span></div>'
+      + '</div>'
+      + '<h3>Puntos por resultado</h3>'
+      + '<table><thead><tr><th>Resultado</th><th style="text-align:center;">Veces</th><th style="text-align:center;">c/u</th><th style="text-align:right;">Subtotal</th></tr></thead><tbody>' + filasRes
+      + '<tr><td style="font-weight:900;">TOTAL</td><td></td><td></td><td style="text-align:right;font-weight:900;background:#eff6ff;color:#1d4ed8;">' + (Math.round(total * 100) / 100) + '</td></tr>'
+      + '</tbody></table>'
+      + '<h3>Puntos por día</h3>'
+      + '<table><thead><tr><th>Día</th><th style="text-align:center;">Interacciones</th><th style="text-align:right;">Puntos</th></tr></thead><tbody>' + filasDia + '</tbody></table>'
+      + '<p class="footer">Generado el ' + Utilities.formatDate(new Date(), "GMT-6", "dd/MM/yyyy HH:mm") + ' &middot; Meta diaria ' + metas.puntos + ' pts &middot; CRM CDES</p>'
+      + '</body></html>';
+
+    const pdf = Utilities.newBlob(html, 'text/html', 'desglose.html').getAs('application/pdf');
+    const nombreArch = 'Puntos ' + nombre + ' ' + iniYYYYMMDD + ' al ' + finYYYYMMDD + '.pdf';
+    pdf.setName(nombreArch);
+    const carpeta = obtenerCarpetaInformes();
+    const archivo = carpeta.createFile(pdf);
+    archivo.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    return { exito: true, url: archivo.getUrl(), nombre: nombreArch, totalPuntos: Math.round(total * 100) / 100, interacciones: inter };
+  } catch (e) {
+    return { exito: false, mensaje: e.message };
+  }
+}
+
 function doGet(e) {
   let html = HtmlService.createTemplateFromFile('Index').evaluate();
   html.setTitle('CRM Ventas CDES');
