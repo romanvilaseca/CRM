@@ -430,6 +430,40 @@ function doGet(e) {
   return html;
 }
 
+// Tiempo desde la última interacción (de cualquier fecha) de un vendedor.
+function obtenerUltimaInteraccion(emailUsuario) {
+  try {
+    const email = String(emailUsuario || '').trim().toLowerCase();
+    if (!email) return { exito: false, minutos: null };
+    const ss = SpreadsheetApp.openById(SHEET_ID_CRM);
+    const h = ss.getSheetByName('VISITAS');
+    if (!h || h.getLastRow() <= 1) return { exito: true, minutos: null };
+    const data = h.getDataRange().getValues();
+    let ultima = null;
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][1]).trim().toLowerCase() !== email) continue;
+      let fVal = data[i][0];
+      let d = null;
+      if (fVal instanceof Date) {
+        d = fVal;
+      } else {
+        let s = String(fVal).trim();
+        if (s.length < 16) continue;
+        let dd = parseInt(s.substring(0, 2), 10), mm = parseInt(s.substring(3, 5), 10), yy = parseInt(s.substring(6, 10), 10);
+        let hh = parseInt(s.substring(11, 13), 10), mi = parseInt(s.substring(14, 16), 10);
+        if (isNaN(dd) || isNaN(hh)) continue;
+        d = new Date(yy, mm - 1, dd, hh, mi);
+      }
+      if (d && (!ultima || d.getTime() > ultima.getTime())) ultima = d;
+    }
+    if (!ultima) return { exito: true, minutos: null };
+    const minutos = Math.max(0, Math.floor((new Date().getTime() - ultima.getTime()) / 60000));
+    return { exito: true, minutos: minutos, fecha: Utilities.formatDate(ultima, "GMT-6", "dd/MM/yyyy HH:mm") };
+  } catch (e) {
+    return { exito: false, minutos: null, mensaje: e.message };
+  }
+}
+
 function getAliasMap() {
   const hojaAjustes = SpreadsheetApp.openById(SHEET_ID_CRM).getSheetByName('USUARIOS_AJUSTES');
   let map = {};

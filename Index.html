@@ -69,6 +69,10 @@
               <button onclick="ejecutarLogin()" id="btn-login" class="w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg hover:bg-blue-700 transition-all active:scale-95 mt-4">Ingresar al Sistema</button>
           </div>
           <p id="login-error" class="text-rose-500 text-[11px] font-bold text-center mt-4 hidden bg-rose-50 p-2 rounded-lg"></p>
+          <div class="text-center mt-8 pt-4 border-t border-slate-100">
+              <p class="text-[9px] text-slate-400 font-bold">CRM <span id="login-version">v2.1</span></p>
+              <p class="text-[9px] text-slate-400 font-bold tracking-widest">Desarrollado por CORPODENT®</p>
+          </div>
       </div>
   </div>
 
@@ -128,6 +132,12 @@
             <button onclick="switchTab('rutas')" id="tab-rutas" class="col-span-1 py-3 px-2 md:px-6 rounded-2xl text-[11px] md:text-sm font-bold text-slate-500 hover:bg-slate-50 transition-all text-center">🗺️ Mapa</button>
             <button onclick="switchTab('productos')" id="tab-productos" class="col-span-1 py-3 px-2 md:px-6 rounded-2xl text-[11px] md:text-sm font-bold text-slate-500 hover:bg-slate-50 transition-all text-center">📦 Productos</button>
             <button onclick="switchTab('reportes')" id="tab-reportes" class="col-span-1 py-3 px-2 md:px-6 rounded-2xl text-[10px] md:text-sm font-black text-slate-600 bg-slate-100 hover:bg-slate-200 transition-all text-center uppercase tracking-widest">📊 RESUMEN</button>
+        </div>
+
+        <!-- Banner: tiempo desde la última interacción (vendedor) -->
+        <div id="banner-ultima" class="hidden max-w-3xl mx-auto mb-6 text-center bg-white border border-slate-200 rounded-2xl px-4 py-3 shadow-sm">
+            <span class="text-xs font-bold text-slate-500">⏱️ Tu última interacción con un cliente fue hace </span>
+            <span id="banner-ultima-valor" class="text-xs font-black text-blue-600">—</span>
         </div>
 
         <div id="vista-rutas">
@@ -946,6 +956,28 @@
         }).obtenerResultadosDisponibles();
     }
 
+    function formatHace(min) {
+        if (min === null || min === undefined) return 'sin interacciones aún';
+        if (min < 1) return 'menos de 1 minuto';
+        var dias = Math.floor(min / 1440);
+        var horas = Math.floor((min % 1440) / 60);
+        var mins = min % 60;
+        if (dias > 0) return dias + ' día' + (dias === 1 ? '' : 's') + ' ' + horas + ' h ' + mins + ' min';
+        if (horas > 0) return horas + ' h ' + mins + ' min';
+        return mins + ' min';
+    }
+
+    function cargarUltimaInteraccion() {
+        if (usuarioRol === 'Admin') return;
+        google.script.run.withSuccessHandler(function(res) {
+            var b = document.getElementById('banner-ultima');
+            var v = document.getElementById('banner-ultima-valor');
+            if (!b || !v) return;
+            b.classList.remove('hidden');
+            v.innerText = (res && res.exito) ? formatHace(res.minutos) : '—';
+        }).obtenerUltimaInteraccion(usuarioLogueado);
+    }
+
     function onResultadoChange() {
         const sel = document.getElementById('resultado');
         const lbl = document.getElementById('resultadoPuntos');
@@ -1014,7 +1046,7 @@
 
                 actualizarDashboard();
                 cargarCockpit();
-                if (usuarioRol !== 'Admin') cargarTimelineUsuario();
+                if (usuarioRol !== 'Admin') { cargarTimelineUsuario(); cargarUltimaInteraccion(); }
                 cargarResultados();
                 loadC();
             } else {
@@ -2853,9 +2885,11 @@
                 atendidosHoyUsuario = res.puntosHoy;
                 actualizarCockpit(atendidosHoyUsuario, metaDiariaUsuario);
                 cargarTimelineUsuario();
+                cargarUltimaInteraccion();
             } else {
                 cargarCockpit();
                 cargarTimelineUsuario();
+                cargarUltimaInteraccion();
             }
 
             // Refresca el panel de rendimiento si la vista Resumen está abierta.
