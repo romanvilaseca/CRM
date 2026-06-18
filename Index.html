@@ -803,6 +803,10 @@
 
               <!-- Sub-formulario FASE 3: corrección de contacto -->
               <div id="bloque-contacto" class="hidden bg-rose-50 border border-rose-200 rounded-2xl p-4 mb-4">
+                  <div id="con-alerta" class="hidden bg-rose-600 text-white rounded-xl p-3 mb-3">
+                      <p class="text-[11px] font-black">⚠️ Este cliente ya acumula <span id="con-alerta-n">3</span> intentos sin respuesta.</p>
+                      <p class="text-[10px] font-bold mt-1">Para registrar otro "sin contacto" debes corregir su número o indicar su estado. Así dejamos de marcar a un teléfono que no sirve.</p>
+                  </div>
                   <p class="text-[10px] font-black text-rose-600 uppercase mb-2 tracking-widest">📞 ¿El número está mal? Corrígelo aquí</p>
                   <input id="con-telalt" type="tel" inputmode="numeric" class="w-full p-3 bg-white rounded-xl text-sm border border-rose-200 outline-none focus:ring-2 focus:ring-rose-400 mb-2" placeholder="Teléfono correcto (8 dígitos, opcional)">
                   <select id="con-validado" class="w-full p-3 bg-white rounded-xl text-sm border border-rose-200 outline-none focus:ring-2 focus:ring-rose-400 mb-2 font-bold text-slate-600">
@@ -1009,6 +1013,20 @@
         const bCon = document.getElementById('bloque-contacto');
         if (bDem) bDem.classList.toggle('hidden', sel.value !== 'Producto no disponible (sin stock)');
         if (bCon) bCon.classList.toggle('hidden', sel.value !== 'No se obtuvo contacto');
+
+        // Si el cliente ya tiene 3+ intentos sin respuesta, exigir corrección de contacto.
+        const alerta = document.getElementById('con-alerta');
+        if (alerta) {
+            const c = _clienteActualModal();
+            const reincidente = sel.value === 'No se obtuvo contacto' && c && (c.noRespuestaCount || 0) >= 3;
+            alerta.classList.toggle('hidden', !reincidente);
+            if (reincidente) document.getElementById('con-alerta-n').innerText = c.noRespuestaCount;
+        }
+    }
+
+    function _clienteActualModal() {
+        const cod = document.getElementById('mCod').innerText;
+        return DATA.find(function(x){ return x.codigo === cod; }) || null;
     }
     let modoTareas = true; 
     let intervaloProgreso = null; 
@@ -2831,6 +2849,17 @@
             const telAlt = (document.getElementById('con-telalt').value || '').replace(/[^0-9]/g, '');
             if (telAlt && telAlt.replace(/^503/, '').length !== 8) {
                 alert("El teléfono correcto debe tener 8 dígitos (El Salvador)."); return;
+            }
+            // Reincidente: ya tiene 3+ intentos sin respuesta -> obligar a corregir el contacto.
+            const cliAlerta = _clienteActualModal();
+            if (cliAlerta && (cliAlerta.noRespuestaCount || 0) >= 3) {
+                const validado = (document.getElementById('con-validado').value || '').trim();
+                const estado = (document.getElementById('con-estado').value || '').trim();
+                if (!telAlt && !validado && !estado) {
+                    alert("Este cliente ya tiene " + cliAlerta.noRespuestaCount + " intentos sin respuesta. Antes de marcar otro 'sin contacto', escribe el número correcto, indica si el registrado está correcto/incorrecto, o pon el estado del cliente.");
+                    document.getElementById('con-telalt').focus();
+                    return;
+                }
             }
         }
 
