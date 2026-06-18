@@ -654,7 +654,9 @@
 
           <div class="bg-white border border-blue-200 p-6 rounded-[30px] shadow-sm mb-6">
               <p class="text-[10px] font-black text-blue-500 uppercase mb-4 tracking-widest">Registrar Interacción de Hoy</p>
-              
+
+              <!-- PASO 1: Canal (cómo lo contacté) -->
+              <p class="text-[9px] font-black text-slate-400 uppercase mb-2 tracking-widest">1 · ¿Cómo lo contactaste?</p>
               <div class="flex flex-wrap gap-2 mb-4 justify-center">
                   <label class="relative cursor-pointer flex-1 min-w-[120px]">
                       <input type="radio" name="tipoInteraccion" value="Visita en Persona" class="peer sr-only" checked>
@@ -672,12 +674,17 @@
                       <input type="radio" name="tipoInteraccion" value="Vino a Sala de Ventas" class="peer sr-only">
                       <div class="p-3 text-center bg-slate-50 border border-slate-200 rounded-2xl text-[10px] md:text-[11px] font-bold text-slate-500 transition-all peer-checked:bg-blue-100 peer-checked:border-blue-500 peer-checked:text-blue-800">🏪 Mostrador</div>
                   </label>
-                  <label class="relative cursor-pointer flex-1 min-w-[120px]">
-                      <input type="radio" name="tipoInteraccion" value="No se obtuvo respuesta por llamada" class="peer sr-only">
-                      <div class="p-3 text-center bg-slate-50 border border-slate-200 rounded-2xl text-[10px] md:text-[11px] font-bold text-slate-500 transition-all peer-checked:bg-rose-100 peer-checked:border-rose-500 peer-checked:text-rose-800 shadow-sm">📵 Sin Respuesta</div>
-                  </label>
               </div>
 
+              <!-- PASO 2: Resultado (qué pasó) - se llena desde CONFIG_PUNTOS -->
+              <p class="text-[9px] font-black text-slate-400 uppercase mb-2 tracking-widest">2 · ¿Qué resultado tuvo?</p>
+              <select id="resultado" onchange="onResultadoChange()" class="w-full p-4 bg-slate-50 rounded-2xl text-sm border border-slate-200 focus:ring-2 focus:ring-blue-400 outline-none mb-2 font-bold text-slate-700">
+                  <option value="">— Selecciona el resultado —</option>
+              </select>
+              <p id="resultadoPuntos" class="text-[10px] font-black text-emerald-600 mb-4 h-3"></p>
+
+              <!-- PASO 3: Nota -->
+              <p class="text-[9px] font-black text-slate-400 uppercase mb-2 tracking-widest">3 · Detalle de lo acordado</p>
               <textarea id="nota" rows="2" class="w-full p-4 bg-slate-50 rounded-2xl text-sm border border-slate-200 focus:ring-2 focus:ring-blue-400 outline-none resize-none mb-4" placeholder="Escribe un resumen de lo acordado con el cliente..."></textarea>
               <button onclick="saveV()" id="btnSave" class="w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg hover:bg-blue-700 active:scale-95 transition-all">✅ GUARDAR INTERACCIÓN</button>
           </div>
@@ -732,6 +739,49 @@
     let usuarioRol = "";
     let metaDiariaUsuario = 10;
     let atendidosHoyUsuario = 0;
+
+    // FASE 1 - catálogo de resultados (se carga desde CONFIG_PUNTOS; fallback local).
+    let RESULTADOS_CONFIG = [
+        { resultado: 'Pedido / venta cerrada', puntos: 3 },
+        { resultado: 'Cotización / oportunidad abierta', puntos: 2 },
+        { resultado: 'Pedido pendiente de confirmar', puntos: 2 },
+        { resultado: 'Contacto efectivo con respuesta', puntos: 1 },
+        { resultado: 'Cliente completo / no necesita', puntos: 1 },
+        { resultado: 'Producto no disponible (sin stock)', puntos: 1 },
+        { resultado: 'Mensaje enviado sin respuesta', puntos: 0.25 },
+        { resultado: 'No se obtuvo contacto', puntos: 0 }
+    ];
+    // Resultados que NO exigen escribir nota (no hubo conversación real).
+    const RESULTADOS_SIN_NOTA = ['No se obtuvo contacto', 'Mensaje enviado sin respuesta'];
+
+    function poblarSelectResultados() {
+        const sel = document.getElementById('resultado');
+        if (!sel) return;
+        sel.innerHTML = '<option value="">— Selecciona el resultado —</option>' +
+            RESULTADOS_CONFIG.map(function(r) {
+                return '<option value="' + r.resultado + '" data-pts="' + r.puntos + '">' + r.resultado + ' (' + r.puntos + ' pts)</option>';
+            }).join('');
+    }
+
+    function cargarResultados() {
+        google.script.run.withSuccessHandler(function(res) {
+            if (res && res.exito && res.resultados && res.resultados.length) {
+                RESULTADOS_CONFIG = res.resultados;
+            }
+            poblarSelectResultados();
+        }).withFailureHandler(function() {
+            poblarSelectResultados();
+        }).obtenerResultadosDisponibles();
+    }
+
+    function onResultadoChange() {
+        const sel = document.getElementById('resultado');
+        const lbl = document.getElementById('resultadoPuntos');
+        if (!sel || !lbl) return;
+        const opt = sel.options[sel.selectedIndex];
+        const pts = opt ? opt.getAttribute('data-pts') : null;
+        lbl.innerText = (pts !== null && sel.value) ? ('Vale ' + pts + ' punto' + (pts == 1 ? '' : 's')) : '';
+    }
     let modoTareas = true; 
     let intervaloProgreso = null; 
     
@@ -787,6 +837,7 @@
                 actualizarDashboard();
                 cargarCockpit();
                 if (usuarioRol !== 'Admin') cargarTimelineUsuario();
+                cargarResultados();
                 loadC();
             } else {
                 btn.innerText = "Ingresar al Sistema"; btn.disabled = false;
@@ -2443,11 +2494,21 @@
     function saveV() {
         const btn = document.getElementById('btnSave');
         const tipoSelect = document.querySelector('input[name="tipoInteraccion"]:checked');
-        if(!tipoSelect) { alert("Selecciona un tipo de interacción"); return; }
+        if(!tipoSelect) { alert("Selecciona cómo contactaste al cliente (paso 1)"); return; }
+
+        const resultadoSel = document.getElementById('resultado');
+        const resultadoVal = resultadoSel ? resultadoSel.value : "";
+        if(!resultadoVal) { alert("Selecciona el resultado de la interacción (paso 2)"); return; }
 
         const codCliente = document.getElementById('mCod').innerText;
         const nomCliente = document.getElementById('mNom').innerText;
         const notaStr = document.getElementById('nota').value;
+
+        // Nota obligatoria cuando hubo conversación real con el cliente.
+        if (RESULTADOS_SIN_NOTA.indexOf(resultadoVal) === -1 && !notaStr.trim()) {
+            alert("Escribe en la nota qué se acordó con el cliente (paso 3).");
+            return;
+        }
 
         if (tipoSelect.value.includes('Visita')) {
             if (navigator.geolocation) {
@@ -2456,41 +2517,46 @@
                 navigator.geolocation.getCurrentPosition(
                     (position) => {
                         let linkGPS = `https://www.google.com/maps?q=${position.coords.latitude},${position.coords.longitude}`;
-                        ejecutarGuardadoDB(codCliente, nomCliente, tipoSelect.value, notaStr, linkGPS);
+                        ejecutarGuardadoDB(codCliente, nomCliente, tipoSelect.value, notaStr, linkGPS, resultadoVal);
                     },
                     (error) => {
                         alert("No se pudo obtener el GPS. Guardando visita sin ubicación.");
-                        ejecutarGuardadoDB(codCliente, nomCliente, tipoSelect.value, notaStr, "Permiso GPS denegado");
+                        ejecutarGuardadoDB(codCliente, nomCliente, tipoSelect.value, notaStr, "Permiso GPS denegado", resultadoVal);
                     },
                     { enableHighAccuracy: true, timeout: 10000 }
                 );
             } else {
-                ejecutarGuardadoDB(codCliente, nomCliente, tipoSelect.value, notaStr, "GPS no soportado");
+                ejecutarGuardadoDB(codCliente, nomCliente, tipoSelect.value, notaStr, "GPS no soportado", resultadoVal);
             }
         } else {
-            ejecutarGuardadoDB(codCliente, nomCliente, tipoSelect.value, notaStr, "N/A");
+            ejecutarGuardadoDB(codCliente, nomCliente, tipoSelect.value, notaStr, "N/A", resultadoVal);
         }
     }
 
-    function ejecutarGuardadoDB(codCliente, nomCliente, tipo, nota, gps) {
+    function ejecutarGuardadoDB(codCliente, nomCliente, tipo, nota, gps, resultado) {
         const btn = document.getElementById('btnSave');
         btn.innerText = "GUARDANDO..."; btn.disabled = true;
-        
+
+        const esNoContacto = (resultado === "No se obtuvo contacto") || (tipo === "No se obtuvo respuesta por llamada");
+
         google.script.run.withSuccessHandler((res) => {
 
-            if (tipo === "No se obtuvo respuesta por llamada") {
-                alert("Registro guardado. El cliente seguirá apareciendo pendiente en la ruta.");
+            let ptsTxt = (res && typeof res.puntosRegistro === 'number') ? (' (+' + res.puntosRegistro + ' pts)') : '';
+            if (esNoContacto) {
+                alert("Registro guardado" + ptsTxt + ". El cliente seguirá apareciendo pendiente en la ruta.");
             } else {
-                alert("Visita registrada. El cliente ha pasado a color verde ✅");
+                alert("Interacción registrada" + ptsTxt + ". El cliente ha pasado a color verde ✅");
             }
 
             btn.innerText = "✅ GUARDAR INTERACCIÓN"; btn.disabled = false;
             document.getElementById('nota').value = "";
+            const selRes = document.getElementById('resultado');
+            if (selRes) { selRes.value = ""; onResultadoChange(); }
             closeM();
 
             let clienteEncontrado = DATA.find(c => c.codigo === codCliente);
             if (clienteEncontrado) {
-                if(tipo === "No se obtuvo respuesta por llamada") {
+                if(esNoContacto) {
                     clienteEncontrado.noRespuestaCount = (clienteEncontrado.noRespuestaCount || 0) + 1;
                     if(clienteEncontrado.noRespuestaCount >= 3) {
                         clienteEncontrado.alertContacto = true;
@@ -2520,11 +2586,12 @@
             }
 
         }).guardarVisita({
-            codigo: codCliente, 
-            nombre: nomCliente, 
+            codigo: codCliente,
+            nombre: nomCliente,
             tipoInteraccion: tipo,
             comentario: nota,
-            gps: gps
+            gps: gps,
+            resultado: resultado
         }, usuarioLogueado);
     }
 
