@@ -110,7 +110,19 @@
     </header>
 
     <main class="container mx-auto px-4 max-w-4xl w-full">
-        
+
+        <!-- FASE 2: resumen explicativo de puntos (para el vendedor) -->
+        <div id="resumen-puntos" class="hidden bg-white border border-blue-200 rounded-[25px] p-4 md:p-5 shadow-sm mb-6 max-w-3xl mx-auto">
+            <details>
+                <summary class="cursor-pointer flex items-center justify-between gap-2 list-none">
+                    <span class="text-xs font-black text-blue-700 uppercase tracking-widest">⭐ ¿Cómo se ganan los puntos?</span>
+                    <span class="text-[10px] font-bold text-slate-400">ver tabla ▾</span>
+                </summary>
+                <p class="text-[11px] text-slate-500 mt-3 mb-3">Cada interacción suma puntos según el <b>resultado</b> que logres con el cliente. Lo que cuenta es avanzar y cerrar ventas, no solo contactar.</p>
+                <div id="resumen-puntos-lista" class="grid grid-cols-1 sm:grid-cols-2 gap-2"></div>
+            </details>
+        </div>
+
         <div class="grid grid-cols-2 md:grid-cols-4 bg-white rounded-[30px] p-2 shadow-sm border border-slate-200 mb-8 mx-auto max-w-3xl gap-2">
             <button onclick="switchTab('tareas')" id="tab-tareas" class="col-span-1 py-3 px-2 md:px-6 rounded-2xl text-[11px] md:text-sm font-black text-white bg-blue-600 shadow-md transition-all text-center">📋 Tareas</button>
             <button onclick="switchTab('rutas')" id="tab-rutas" class="col-span-1 py-3 px-2 md:px-6 rounded-2xl text-[11px] md:text-sm font-bold text-slate-500 hover:bg-slate-50 transition-all text-center">🗺️ Mapa</button>
@@ -337,6 +349,7 @@
                     <span class="text-lg">🎯</span>
                     <h3 id="rend-titulo" class="text-sm font-black text-slate-800">Mi Rendimiento</h3>
                     <span id="rend-sub" class="text-[10px] font-bold text-slate-400 uppercase tracking-widest"></span>
+                    <button id="btn-ajustar-metas" onclick="abrirModalMetas()" class="hidden ml-auto text-[10px] font-black text-blue-600 hover:text-blue-800 hover:bg-blue-50 px-3 py-1.5 rounded-full uppercase tracking-widest transition-all">⚙️ Ajustar metas</button>
                 </div>
                 <div id="rend-contenido" class="text-center text-xs text-slate-400 py-6 animate-pulse">Calculando…</div>
             </div>
@@ -765,6 +778,32 @@
       </div>
   </div>
 
+  <!-- FASE 2: Modal de admin para editar las metas de cada vendedor -->
+  <div id="modal-metas" class="modal opacity-0 pointer-events-none fixed inset-0 flex items-center justify-center z-[210] p-4 bg-slate-900/80 backdrop-blur-md">
+      <div class="bg-white rounded-[30px] shadow-2xl w-full max-w-2xl max-h-[85vh] overflow-y-auto p-6 md:p-8 scale-95 transition-transform">
+          <div class="flex items-center justify-between mb-2">
+              <h3 class="text-xl font-black text-slate-800">⚙️ Metas por vendedor</h3>
+              <button onclick="cerrarModalMetas()" class="text-slate-400 hover:text-slate-700 text-2xl font-black leading-none">&times;</button>
+          </div>
+          <p class="text-[11px] text-slate-400 mb-4">Define la meta diaria de cada quien. Puntos usa la ponderación por resultado. Deja 0 en un canal para "sin meta".</p>
+          <div class="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-2xl px-4 py-3 mb-4">
+              <span class="text-[11px] font-bold text-blue-700">Poner la misma meta de puntos a todos:</span>
+              <div class="flex items-center gap-2">
+                  <input id="meta-todos-valor" type="number" min="0" step="1" value="30" class="w-20 p-2 bg-white rounded-xl text-sm border border-blue-200 outline-none text-center font-black">
+                  <button onclick="ponerMetaPuntosTodos()" class="bg-blue-600 text-white px-3 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-blue-700 active:scale-95 transition-all">Aplicar</button>
+              </div>
+          </div>
+          <div class="overflow-x-auto">
+              <table class="w-full text-left">
+                  <thead><tr class="text-[9px] text-slate-400 uppercase tracking-widest border-b border-slate-200">
+                      <th class="py-2 px-1">Vendedor</th><th class="py-2 px-1 text-center">Puntos</th><th class="py-2 px-1 text-center">Llam.</th><th class="py-2 px-1 text-center">WA</th><th class="py-2 px-1 text-center">Visitas</th><th class="py-2 px-1"></th>
+                  </tr></thead>
+                  <tbody id="metas-tbody"><tr><td colspan="6" class="text-center text-xs text-slate-400 py-6 animate-pulse">Cargando…</td></tr></tbody>
+              </table>
+          </div>
+      </div>
+  </div>
+
   <script>
     let DATA = [];
     let DATA_FILTRADA = []; 
@@ -830,11 +869,30 @@
 
     function poblarSelectResultados() {
         const sel = document.getElementById('resultado');
-        if (!sel) return;
-        sel.innerHTML = '<option value="">— Selecciona el resultado —</option>' +
-            RESULTADOS_CONFIG.map(function(r) {
-                return '<option value="' + r.resultado + '" data-pts="' + r.puntos + '">' + r.resultado + ' (' + r.puntos + ' pts)</option>';
+        if (sel) {
+            sel.innerHTML = '<option value="">— Selecciona el resultado —</option>' +
+                RESULTADOS_CONFIG.map(function(r) {
+                    return '<option value="' + r.resultado + '" data-pts="' + r.puntos + '">' + r.resultado + ' (' + r.puntos + ' pts)</option>';
+                }).join('');
+        }
+        // Resumen explicativo de puntos (parte superior, para el vendedor).
+        const lista = document.getElementById('resumen-puntos-lista');
+        if (lista) {
+            lista.innerHTML = RESULTADOS_CONFIG.slice().sort(function(a,b){ return b.puntos - a.puntos; }).map(function(r) {
+                let color = r.puntos >= 2 ? 'text-emerald-600 bg-emerald-50 border-emerald-200'
+                          : r.puntos >= 1 ? 'text-blue-600 bg-blue-50 border-blue-200'
+                          : r.puntos > 0 ? 'text-amber-600 bg-amber-50 border-amber-200'
+                          : 'text-slate-400 bg-slate-50 border-slate-200';
+                return '<div class="flex items-center justify-between border rounded-xl px-3 py-2 ' + color + '">'
+                    + '<span class="text-[11px] font-bold">' + r.resultado + '</span>'
+                    + '<span class="text-xs font-black whitespace-nowrap ml-2">' + r.puntos + ' pt' + (r.puntos == 1 ? '' : 's') + '</span>'
+                    + '</div>';
             }).join('');
+        }
+        if (usuarioRol !== 'Admin') {
+            const cont = document.getElementById('resumen-puntos');
+            if (cont) cont.classList.remove('hidden');
+        }
     }
 
     function cargarResultados() {
@@ -995,6 +1053,8 @@
         if (usuarioRol === 'Admin') {
             document.getElementById('rend-titulo').innerText = 'Rendimiento del Equipo';
             document.getElementById('rend-sub').innerText = 'Puntos de hoy vs meta';
+            const btnMetas = document.getElementById('btn-ajustar-metas');
+            if (btnMetas) btnMetas.classList.remove('hidden');
             const fechaAdmin = FECHA_ADMIN_SEL ? yyyymmddToDdmmyyyy(FECHA_ADMIN_SEL) : null;
             google.script.run.withSuccessHandler(function(res){
                 if(!res || !res.exito){ cont.innerHTML='<p class="text-center text-xs text-rose-400 py-4">No se pudo cargar el rendimiento.</p>'; return; }
@@ -2781,6 +2841,66 @@
                 estadoCliente: (document.getElementById('con-estado').value || '').trim()
             } : null
         }, usuarioLogueado);
+    }
+
+    // ===== FASE 2: modal de admin para editar metas =====
+    function abrirModalMetas() {
+        const m = document.getElementById('modal-metas');
+        m.classList.remove('opacity-0', 'pointer-events-none');
+        m.children[0].classList.remove('scale-95');
+        document.getElementById('metas-tbody').innerHTML = '<tr><td colspan="6" class="text-center text-xs text-slate-400 py-6 animate-pulse">Cargando…</td></tr>';
+        google.script.run.withSuccessHandler(function(res){
+            if(!res || !res.exito){ document.getElementById('metas-tbody').innerHTML = '<tr><td colspan="6" class="text-center text-xs text-rose-400 py-6">No se pudo cargar.</td></tr>'; return; }
+            renderModalMetas(res.asesores || []);
+        }).withFailureHandler(function(){ document.getElementById('metas-tbody').innerHTML = '<tr><td colspan="6" class="text-center text-xs text-rose-400 py-6">Error de red.</td></tr>'; })
+          .obtenerMetasEquipo();
+    }
+
+    function cerrarModalMetas() {
+        const m = document.getElementById('modal-metas');
+        m.classList.add('opacity-0', 'pointer-events-none');
+        m.children[0].classList.add('scale-95');
+    }
+
+    function renderModalMetas(asesores) {
+        const tb = document.getElementById('metas-tbody');
+        if(!asesores.length){ tb.innerHTML = '<tr><td colspan="6" class="text-center text-xs text-slate-400 py-6">Sin vendedores.</td></tr>'; return; }
+        tb.innerHTML = asesores.map(function(a){
+            const e = a.email;
+            function inp(campo, val){ return '<input type="number" min="0" step="0.5" value="'+val+'" id="meta-'+campo+'-'+e+'" class="w-16 p-1.5 bg-slate-50 rounded-lg text-xs border border-slate-200 outline-none text-center font-bold focus:ring-2 focus:ring-blue-400">'; }
+            return '<tr class="border-b border-slate-100" data-email="'+e+'">'
+                + '<td class="py-2 px-1 font-bold text-slate-700 text-xs">'+a.alias+'</td>'
+                + '<td class="py-2 px-1 text-center">'+inp('puntos', a.puntos)+'</td>'
+                + '<td class="py-2 px-1 text-center">'+inp('llamadas', a.llamadas)+'</td>'
+                + '<td class="py-2 px-1 text-center">'+inp('whatsapp', a.whatsapp)+'</td>'
+                + '<td class="py-2 px-1 text-center">'+inp('visitas', a.visitas)+'</td>'
+                + '<td class="py-2 px-1 text-center"><button onclick="guardarMetaFila(\''+e+'\')" id="btnmeta-'+e+'" class="bg-emerald-600 text-white px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase hover:bg-emerald-700 active:scale-95 transition-all">Guardar</button></td>'
+                + '</tr>';
+        }).join('');
+    }
+
+    function guardarMetaFila(email) {
+        const btn = document.getElementById('btnmeta-'+email);
+        const v = function(campo){ return document.getElementById('meta-'+campo+'-'+email).value; };
+        btn.innerText = '...'; btn.disabled = true;
+        google.script.run.withSuccessHandler(function(res){
+            if(res && res.exito){ btn.innerText = '✓'; btn.classList.remove('bg-emerald-600'); btn.classList.add('bg-emerald-800');
+                setTimeout(function(){ btn.innerText='Guardar'; btn.classList.add('bg-emerald-600'); btn.classList.remove('bg-emerald-800'); btn.disabled=false; }, 1200);
+                if(usuarioRol==='Admin') cargarRendimiento();
+            } else { btn.innerText='Guardar'; btn.disabled=false; alert((res&&res.mensaje)?res.mensaje:'No se pudo guardar.'); }
+        }).withFailureHandler(function(){ btn.innerText='Guardar'; btn.disabled=false; alert('Error de red.'); })
+          .guardarMetasUsuario({ email: email, puntos: v('puntos'), llamadas: v('llamadas'), whatsapp: v('whatsapp'), visitas: v('visitas') });
+    }
+
+    function ponerMetaPuntosTodos() {
+        const val = document.getElementById('meta-todos-valor').value;
+        if(val === '' || isNaN(parseFloat(val))){ alert('Escribe un número de puntos.'); return; }
+        if(!confirm('¿Poner '+val+' puntos de meta diaria a TODOS los vendedores?')) return;
+        google.script.run.withSuccessHandler(function(res){
+            if(res && res.exito){ alert('✅ Meta de '+res.valor+' puntos aplicada a '+res.vendedores+' vendedores.'); abrirModalMetas(); if(usuarioRol==='Admin') cargarRendimiento(); }
+            else alert((res&&res.mensaje)?res.mensaje:'No se pudo aplicar.');
+        }).withFailureHandler(function(){ alert('Error de red.'); })
+          .ajustarMetaPuntosTodos(val);
     }
 
     // ===== FASES 3 y 4: paneles de admin =====

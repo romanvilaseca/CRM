@@ -224,6 +224,83 @@ function obtenerMetasUsuario(email) {
   return map[e] || { puntos: 10, llamadas: 0, whatsapp: 0, visitas: 0 };
 }
 
+// Lista de vendedores activos con su alias y sus 4 metas (para el editor del admin).
+function obtenerMetasEquipo() {
+  try {
+    obtenerHojaMetasUsuario(); // asegura que exista con semilla
+    const map = obtenerTodasLasMetas();
+    const ss = SpreadsheetApp.openById(SHEET_ID_CRM);
+    const hojaAjustes = ss.getSheetByName('USUARIOS_AJUSTES');
+    const lista = [];
+    if (hojaAjustes) {
+      const datos = hojaAjustes.getDataRange().getDisplayValues();
+      for (let i = 1; i < datos.length; i++) {
+        let rol = String(datos[i][1]).trim();
+        let estado = String(datos[i][3]).trim();
+        if (estado !== 'Activo' || rol === 'Admin') continue;
+        let email = String(datos[i][0]).trim().toLowerCase();
+        if (!email) continue;
+        let alias = String(datos[i][4]).trim() || email.split('@')[0];
+        let m = map[email] || { puntos: 10, llamadas: 0, whatsapp: 0, visitas: 0 };
+        lista.push({ email: email, alias: alias, puntos: m.puntos, llamadas: m.llamadas, whatsapp: m.whatsapp, visitas: m.visitas });
+      }
+    }
+    return { exito: true, asesores: lista };
+  } catch (e) {
+    return { exito: false, mensaje: e.message, asesores: [] };
+  }
+}
+
+// Guarda/actualiza las 4 metas de un vendedor en METAS_USUARIO (solo admin desde el modal).
+function guardarMetasUsuario(d) {
+  try {
+    const email = String(d.email || '').trim().toLowerCase();
+    if (!email) return { exito: false, mensaje: 'Falta el correo del vendedor.' };
+    const h = obtenerHojaMetasUsuario();
+    const data = h.getDataRange().getValues();
+    const fila = [
+      email,
+      _numMeta(d.puntos, 30),
+      _numMeta(d.llamadas, 0),
+      _numMeta(d.whatsapp, 0),
+      _numMeta(d.visitas, 0)
+    ];
+    let encontrado = -1;
+    for (let i = 1; i < data.length; i++) {
+      if (String(data[i][0]).trim().toLowerCase() === email) { encontrado = i + 1; break; }
+    }
+    if (encontrado > 0) {
+      h.getRange(encontrado, 1, 1, 5).setValues([fila]);
+    } else {
+      h.appendRow(fila);
+    }
+    return { exito: true, metas: { puntos: fila[1], llamadas: fila[2], whatsapp: fila[3], visitas: fila[4] } };
+  } catch (e) {
+    return { exito: false, mensaje: e.message };
+  }
+}
+
+function _numMeta(v, def) {
+  let n = parseFloat(String(v).replace(',', '.'));
+  if (isNaN(n) || n < 0) return def;
+  return n;
+}
+
+// Ajuste masivo de la Meta puntos para todos los vendedores (admin).
+function ajustarMetaPuntosTodos(valor) {
+  try {
+    const v = _numMeta(valor, 30);
+    obtenerHojaMetasUsuario();
+    const eq = obtenerMetasEquipo();
+    eq.asesores.forEach(function(a) {
+      guardarMetasUsuario({ email: a.email, puntos: v, llamadas: a.llamadas, whatsapp: a.whatsapp, visitas: a.visitas });
+    });
+    return { exito: true, valor: v, vendedores: eq.asesores.length };
+  } catch (e) {
+    return { exito: false, mensaje: e.message };
+  }
+}
+
 // Convierte una celda de fecha de VISITAS a Date (solo día, zona El Salvador).
 function _fechaVisitaADate(fVal) {
   let ds = (fVal instanceof Date)
