@@ -10,12 +10,12 @@ const SHEET_ID_CRM = '14WJaC8VkcYAXIiO65Q9DDXh9RXhdUSg8120_L9mG9YY';
 // ============================================================
 const RESULTADOS_DEFAULT = [
   ['Pedido / venta cerrada', 3],
-  ['Cotización / oportunidad abierta', 2],
-  ['Pedido pendiente de confirmar', 2],
+  ['Cotización / oportunidad abierta', 1],
+  ['Pedido pendiente de confirmar', 1],
   ['Contacto efectivo con respuesta', 1],
-  ['Cliente completo / no necesita', 1],
-  ['Producto no disponible (sin stock)', 1],
-  ['Mensaje enviado sin respuesta', 0.25],
+  ['Cliente completo / no necesita', 0.5],
+  ['Producto no disponible (sin stock)', 0.5],
+  ['Mensaje enviado sin respuesta', 0],
   ['No se obtuvo contacto', 0]
 ];
 // Resultados que NO implican contacto real con el cliente (no marcan "contactado").

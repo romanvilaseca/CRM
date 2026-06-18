@@ -743,12 +743,12 @@
     // FASE 1 - catálogo de resultados (se carga desde CONFIG_PUNTOS; fallback local).
     let RESULTADOS_CONFIG = [
         { resultado: 'Pedido / venta cerrada', puntos: 3 },
-        { resultado: 'Cotización / oportunidad abierta', puntos: 2 },
-        { resultado: 'Pedido pendiente de confirmar', puntos: 2 },
+        { resultado: 'Cotización / oportunidad abierta', puntos: 1 },
+        { resultado: 'Pedido pendiente de confirmar', puntos: 1 },
         { resultado: 'Contacto efectivo con respuesta', puntos: 1 },
-        { resultado: 'Cliente completo / no necesita', puntos: 1 },
-        { resultado: 'Producto no disponible (sin stock)', puntos: 1 },
-        { resultado: 'Mensaje enviado sin respuesta', puntos: 0.25 },
+        { resultado: 'Cliente completo / no necesita', puntos: 0.5 },
+        { resultado: 'Producto no disponible (sin stock)', puntos: 0.5 },
+        { resultado: 'Mensaje enviado sin respuesta', puntos: 0 },
         { resultado: 'No se obtuvo contacto', puntos: 0 }
     ];
     // Resultados que NO exigen escribir nota (no hubo conversación real).
