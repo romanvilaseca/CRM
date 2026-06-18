@@ -1,0 +1,2839 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>CRM Ventas CDES</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Inter', sans-serif; }
+    * { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+    .bg-animate { background-size: 200% 200%; animation: gradientMove 5s ease infinite; }
+    @keyframes gradientMove { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+    .fade-in { animation: fadeIn 0.5s ease-in-out forwards; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    .gradiente-sap { background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); }
+    .modal { transition: all 0.3s ease; }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    .geo-zone { border-radius: 20px; padding: 15px; border: 2px solid transparent; cursor: pointer; transition: all 0.2s; }
+    .geo-zone:hover { border-color: #3b82f6; transform: translateY(-2px); box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1); }
+    .geo-zone.active { background-color: #eff6ff; border-color: #2563eb; }
+    .tarjeta-cliente { content-visibility: auto; contain-intrinsic-size: 250px; }
+    input[type="radio"]:checked + div { background-color: #dbeafe; border-color: #3b82f6; color: #1e3a8a; font-weight: 900; }
+    .tl-dot { position: absolute; width: 7px; height: 7px; border-radius: 50%; box-shadow: 0 0 0 1px white; transform: translateX(-50%); cursor: pointer; transition: transform 0.18s ease, box-shadow 0.18s ease; z-index: 1; }
+    .tl-dot:hover { transform: translateX(-50%) scale(2.3); box-shadow: 0 0 0 1.5px white, 0 4px 10px rgba(0,0,0,0.3); z-index: 20; }
+    .tl-tooltip { position: absolute; transform: translateX(-50%); background: #0f172a; color: white; font-size: 10px; font-weight: 700; padding: 4px 8px; border-radius: 8px; white-space: nowrap; opacity: 0; pointer-events: none; transition: opacity 0.15s; z-index: 30; box-shadow: 0 4px 12px rgba(0,0,0,0.2); }
+    .tl-tooltip::after { content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%); border: 4px solid transparent; border-top-color: #0f172a; }
+  </style>
+</head>
+<body class="bg-slate-100 text-gray-800 min-h-screen flex flex-col pb-10">
+
+  <div id="pantalla-carga" class="fixed inset-0 z-[300] flex flex-col items-center justify-center bg-gradient-to-br from-blue-900 via-blue-600 to-purple-900 bg-animate text-white transition-opacity duration-500">
+    <svg class="animate-spin h-14 w-14 mb-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+    <h2 id="texto-carga" class="text-2xl font-black tracking-wide text-center">Iniciando CRM...</h2>
+    
+    <div id="contenedor-progreso-carga" class="hidden flex-col items-center w-full max-w-xs px-6 mt-6">
+        <div class="w-full bg-white/20 rounded-full h-2 mb-2 overflow-hidden shadow-inner">
+            <div id="barra-carga-inteligencia" class="bg-white h-2 rounded-full transition-all duration-[800ms] ease-out w-0"></div>
+        </div>
+        <p id="texto-pasos-carga" class="text-[10px] text-blue-200 font-bold uppercase tracking-widest animate-pulse">Analizando base de datos...</p>
+    </div>
+
+    <div id="tip-carga" class="hidden absolute bottom-20 left-0 right-0 flex justify-center px-6">
+        <div class="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl px-5 py-3 max-w-sm text-center transition-opacity duration-700 opacity-0" id="tip-carga-inner">
+            <p class="text-[10px] text-blue-100 font-black uppercase tracking-widest mb-1">💡 TIP</p>
+            <p id="tip-carga-texto" class="text-[12px] text-white font-semibold leading-snug"></p>
+        </div>
+    </div>
+  </div>
+
+  <div id="pantalla-login" class="hidden fixed inset-0 z-[200] flex items-center justify-center bg-slate-100">
+      <div class="bg-white p-8 md:p-10 rounded-[35px] shadow-2xl max-w-sm w-full mx-4 fade-in border border-slate-200">
+          <div class="text-center mb-8">
+              <h1 class="text-4xl font-black tracking-tighter italic mb-1 uppercase text-slate-800">CRM <span class="text-blue-600">CDES</span></h1>
+              <p class="text-[10px] text-slate-400 font-bold uppercase tracking-widest">Portal de Acceso</p>
+          </div>
+          <div class="space-y-5">
+              <div>
+                  <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-2 block mb-2">Correo Electrónico</label>
+                  <input type="email" id="login-email" class="w-full p-4 rounded-2xl bg-slate-50 border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 font-bold text-sm text-slate-700" placeholder="ej: vendedor@gmail.com">
+              </div>
+              <div>
+                  <label class="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-2 block mb-2">PIN Numérico</label>
+                  <input type="password" id="login-pin" class="w-full p-4 rounded-2xl bg-slate-50 border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 font-bold text-lg tracking-[0.3em] text-center text-slate-700" placeholder="••••">
+              </div>
+              <button onclick="ejecutarLogin()" id="btn-login" class="w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg hover:bg-blue-700 transition-all active:scale-95 mt-4">Ingresar al Sistema</button>
+          </div>
+          <p id="login-error" class="text-rose-500 text-[11px] font-bold text-center mt-4 hidden bg-rose-50 p-2 rounded-lg"></p>
+      </div>
+  </div>
+
+  <div id="app-container" class="hidden flex-1 w-full flex flex-col fade-in">
+    <header class="gradiente-sap text-white p-10 shadow-2xl rounded-b-[50px] mb-8">
+        <div class="container mx-auto max-w-4xl text-center">
+            <h1 class="text-5xl font-black tracking-tighter italic mb-2 uppercase">CRM <span class="text-blue-400">CDES</span></h1>
+            <p class="text-slate-400 text-[10px] font-bold tracking-[0.4em] uppercase" id="user-info">Conectando...</p>
+            
+            <div class="grid grid-cols-3 gap-3 md:gap-4 mt-8">
+                <div class="bg-white/5 p-4 rounded-3xl border border-white/10 backdrop-blur-md">
+                    <p class="text-[9px] text-blue-400 font-black uppercase mb-1">Ventas Históricas</p>
+                    <p id="kpi-ventas" class="text-xl md:text-2xl font-black">--</p>
+                    <p id="kpi-fecha-ventas" class="text-[8px] text-slate-500 mt-1">--</p>
+                </div>
+
+                <div id="cockpit-tile" class="bg-white/5 p-3 md:p-4 rounded-3xl border border-white/10 backdrop-blur-md flex flex-col items-center justify-center">
+                    <p id="cockpit-label" class="text-[9px] text-blue-400 font-black uppercase mb-1 text-center">Mi Meta Hoy</p>
+                    <div class="relative w-16 h-16 md:w-20 md:h-20">
+                        <svg class="w-full h-full -rotate-90" viewBox="0 0 36 36">
+                            <circle cx="18" cy="18" r="15.915" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="3"/>
+                            <circle id="cockpit-arco" cx="18" cy="18" r="15.915" fill="none" stroke="#10b981" stroke-width="3" stroke-dasharray="0 100" stroke-linecap="round" style="transition: stroke-dasharray 0.7s ease, stroke 0.4s ease"/>
+                        </svg>
+                        <div class="absolute inset-0 flex flex-col items-center justify-center">
+                            <p id="cockpit-fraccion" class="text-[11px] md:text-sm font-black text-white leading-none">0/0</p>
+                            <p id="cockpit-pct" class="text-[8px] md:text-[9px] font-bold text-slate-300 leading-none mt-0.5">0%</p>
+                        </div>
+                    </div>
+                    <p id="cockpit-estado" class="text-[8px] text-slate-500 mt-1 text-center font-bold">--</p>
+                </div>
+
+                <div class="bg-white/5 p-4 rounded-3xl border border-white/10 backdrop-blur-md">
+                    <p class="text-[9px] text-blue-400 font-black uppercase mb-1">Total Clientes</p>
+                    <p id="kpi-clientes" class="text-xl md:text-2xl font-black">--</p>
+                    <p id="kpi-fecha-clientes" class="text-[8px] text-slate-500 mt-1">--</p>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="container mx-auto px-4 max-w-4xl w-full">
+        
+        <div class="grid grid-cols-2 md:grid-cols-4 bg-white rounded-[30px] p-2 shadow-sm border border-slate-200 mb-8 mx-auto max-w-3xl gap-2">
+            <button onclick="switchTab('tareas')" id="tab-tareas" class="col-span-1 py-3 px-2 md:px-6 rounded-2xl text-[11px] md:text-sm font-black text-white bg-blue-600 shadow-md transition-all text-center">📋 Tareas</button>
+            <button onclick="switchTab('rutas')" id="tab-rutas" class="col-span-1 py-3 px-2 md:px-6 rounded-2xl text-[11px] md:text-sm font-bold text-slate-500 hover:bg-slate-50 transition-all text-center">🗺️ Mapa</button>
+            <button onclick="switchTab('productos')" id="tab-productos" class="col-span-1 py-3 px-2 md:px-6 rounded-2xl text-[11px] md:text-sm font-bold text-slate-500 hover:bg-slate-50 transition-all text-center">📦 Productos</button>
+            <button onclick="switchTab('reportes')" id="tab-reportes" class="col-span-1 py-3 px-2 md:px-6 rounded-2xl text-[10px] md:text-sm font-black text-slate-600 bg-slate-100 hover:bg-slate-200 transition-all text-center uppercase tracking-widest">📊 RESUMEN</button>
+        </div>
+
+        <div id="vista-rutas">
+            <a href="https://www.corpodent.net/delivery" target="_blank" rel="noopener noreferrer" class="flex items-center justify-center gap-3 w-full bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-black text-sm py-4 px-6 rounded-[25px] shadow-md transition-all mb-6 uppercase tracking-widest">
+                🚚 Gestor de Rutas — Domicilio
+            </a>
+
+            <div id="bloque-timeline-usuario" class="bg-white p-5 rounded-[30px] border border-slate-200 shadow-sm mb-6 hidden">
+                <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="text-lg">🕐</span>
+                        <h3 id="timeline-titulo" class="text-sm font-black text-slate-800 leading-none">Mi Día</h3>
+                        <span id="timeline-resumen" class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">0 visitas</span>
+                    </div>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <input type="date" id="timeline-fecha" class="text-[11px] font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-full px-3 py-1.5 outline-none focus:ring-2 focus:ring-blue-400" onchange="cambiarFechaTimelineUsuario()">
+                        <button id="btn-timeline-hoy" onclick="resetFechaTimelineUsuario()" class="hidden text-[10px] font-black text-blue-600 hover:text-blue-800 uppercase tracking-widest px-3 py-1.5 rounded-full hover:bg-blue-50 transition-all">← Hoy</button>
+                        <span id="timeline-ultima" class="text-[10px] font-bold text-slate-400"></span>
+                    </div>
+                </div>
+                <div id="timeline-canvas" class="relative bg-slate-50 rounded-2xl h-32 overflow-hidden"></div>
+                <div id="timeline-franjas" class="grid grid-cols-3 gap-2 mt-3 text-center"></div>
+            </div>
+
+            <div id="contenedor-mapa" class="bg-white p-6 md:p-8 rounded-[35px] shadow-sm border border-slate-200 mb-8 fade-in hidden">
+                <div class="flex items-center gap-3 mb-6">
+                    <span class="text-2xl">📍</span>
+                    <h2 class="text-lg font-black text-slate-800 tracking-tight">Filtrar Zona Geográfica</h2>
+                </div>
+                
+                <div class="bg-slate-50 rounded-3xl p-4 border grid grid-cols-1 md:grid-cols-4 gap-3">
+                    <div class="bg-white p-3 rounded-2xl shadow-sm border border-slate-100">
+                        <p class="text-[9px] font-black text-indigo-400 uppercase mb-2 text-center">Occidente</p>
+                        <div class="space-y-2">
+                            <div id="map-AHUACHAPAN" onclick="toggleFiltro('dep', 'AHUACHAPAN')" class="geo-zone bg-slate-100 text-center"><p class="text-[10px] font-bold">Ahuachapán</p></div>
+                            <div id="map-SANTA ANA" onclick="toggleFiltro('dep', 'SANTA ANA')" class="geo-zone bg-slate-100 text-center"><p class="text-[10px] font-bold">Santa Ana</p></div>
+                            <div id="map-SONSONATE" onclick="toggleFiltro('dep', 'SONSONATE')" class="geo-zone bg-slate-100 text-center"><p class="text-[10px] font-bold">Sonsonate</p></div>
+                        </div>
+                    </div>
+                    <div class="bg-white p-3 rounded-2xl shadow-sm border border-slate-100">
+                        <p class="text-[9px] font-black text-rose-400 uppercase mb-2 text-center">Centro</p>
+                        <div class="space-y-2">
+                            <div id="map-CHALATENANGO" onclick="toggleFiltro('dep', 'CHALATENANGO')" class="geo-zone bg-slate-100 text-center"><p class="text-[10px] font-bold">Chalatenango</p></div>
+                            <div id="map-LA LIBERTAD" onclick="toggleFiltro('dep', 'LA LIBERTAD')" class="geo-zone bg-slate-100 text-center"><p class="text-[10px] font-bold">La Libertad</p></div>
+                            <div id="map-SAN SALVADOR" onclick="toggleFiltro('dep', 'SAN SALVADOR')" class="geo-zone bg-slate-100 text-center"><p class="text-[10px] font-bold text-blue-600">San Salvador</p></div>
+                        </div>
+                    </div>
+                    <div class="bg-white p-3 rounded-2xl shadow-sm border border-slate-100">
+                        <p class="text-[9px] font-black text-emerald-500 uppercase mb-2 text-center">Paracentral</p>
+                        <div class="space-y-2">
+                            <div id="map-CUSCATLAN" onclick="toggleFiltro('dep', 'CUSCATLAN')" class="geo-zone bg-slate-100 text-center"><p class="text-[10px] font-bold">Cuscatlán</p></div>
+                            <div id="map-LA PAZ" onclick="toggleFiltro('dep', 'LA PAZ')" class="geo-zone bg-slate-100 text-center"><p class="text-[10px] font-bold">La Paz</p></div>
+                            <div id="map-CABAÑAS" onclick="toggleFiltro('dep', 'CABAÑAS')" class="geo-zone bg-slate-100 text-center"><p class="text-[10px] font-bold">Cabañas</p></div>
+                            <div id="map-SAN VICENTE" onclick="toggleFiltro('dep', 'SAN VICENTE')" class="geo-zone bg-slate-100 text-center"><p class="text-[10px] font-bold">San Vicente</p></div>
+                        </div>
+                    </div>
+                    <div class="bg-white p-3 rounded-2xl shadow-sm border border-slate-100">
+                        <p class="text-[9px] font-black text-amber-500 uppercase mb-2 text-center">Oriente</p>
+                        <div class="space-y-2">
+                            <div id="map-USULUTAN" onclick="toggleFiltro('dep', 'USULUTAN')" class="geo-zone bg-slate-100 text-center"><p class="text-[10px] font-bold">Usulután</p></div>
+                            <div id="map-SAN MIGUEL" onclick="toggleFiltro('dep', 'SAN MIGUEL')" class="geo-zone bg-slate-100 text-center"><p class="text-[10px] font-bold">San Miguel</p></div>
+                            <div id="map-MORAZAN" onclick="toggleFiltro('dep', 'MORAZAN')" class="geo-zone bg-slate-100 text-center"><p class="text-[10px] font-bold">Morazán</p></div>
+                            <div id="map-LA UNION" onclick="toggleFiltro('dep', 'LA UNION')" class="geo-zone bg-slate-100 text-center"><p class="text-[10px] font-bold">La Unión</p></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="contenedor-municipios" class="hidden mt-6">
+                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">🏘️ Filtrar por Municipio</p>
+                    <div id="chip-municipios" class="flex flex-wrap gap-2"></div>
+                </div>
+            </div>
+
+            <div id="contenedor-vendedores" class="bg-white p-6 md:p-8 rounded-[35px] shadow-sm border border-slate-200 mb-8 fade-in">
+                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">👨‍💼 Filtro Rápido de Asesor</p>
+                <div id="chip-vendedores" class="flex flex-wrap gap-2"></div>
+            </div>
+
+            <div class="flex flex-col md:flex-row gap-4 mb-8">
+                <div class="relative flex-1">
+                    <input type="text" id="busc" placeholder="Buscar por nombre o código de cliente..." class="w-full p-6 pl-16 rounded-[35px] shadow-xl border-none focus:ring-4 focus:ring-blue-500/20 outline-none text-slate-700 text-lg font-semibold">
+                    <span class="absolute left-7 top-6 text-2xl">🔍</span>
+                </div>
+                <button onclick="toggleGestionados()" id="btn-solo-gestionados" class="bg-white border border-slate-200 text-slate-500 font-black text-xs px-6 py-4 rounded-[35px] shadow-sm hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 transition-all uppercase tracking-widest flex items-center justify-center gap-2 min-w-[200px] active:scale-95">
+                    <span id="icon-gestionados" class="text-xl">⚪</span> Mostrar Gestionados
+                </button>
+            </div>
+
+            <div id="contenedor-tipo-cli" class="mb-6 hidden">
+                <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">🏷️ Filtro por Tipo de Cliente</p>
+                <div id="chip-tipo-cli" class="flex flex-wrap gap-2"></div>
+            </div>
+
+            <div id="indicador-filtros" class="bg-blue-50 text-blue-700 p-4 rounded-2xl border border-blue-100 mb-6 text-xs md:text-sm font-bold text-center shadow-sm hidden transition-all"></div>
+
+            <div id="contenedor-clasificacion" class="grid grid-cols-3 gap-2 md:gap-4 mb-6 hidden fade-in">
+                <button onclick="toggleFiltro('clase', 'A')" id="btn-clase-A" class="bg-white p-3 md:p-4 rounded-3xl border border-slate-200 text-center hover:border-rose-400 hover:shadow-md transition-all active:scale-95 group relative overflow-hidden">
+                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest group-hover:text-rose-500 transition-colors">⭐ VIP (A)</p>
+                    <h3 class="text-xl md:text-2xl font-black text-slate-800 mt-1" id="count-clase-A">0/0</h3>
+                    <p class="text-[8px] md:text-[9px] font-bold text-slate-400 uppercase mt-1">Gestionados</p>
+                </button>
+                <button onclick="toggleFiltro('clase', 'B')" id="btn-clase-B" class="bg-white p-3 md:p-4 rounded-3xl border border-slate-200 text-center hover:border-amber-400 hover:shadow-md transition-all active:scale-95 group relative overflow-hidden">
+                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest group-hover:text-amber-500 transition-colors">👍 Regulares (B)</p>
+                    <h3 class="text-xl md:text-2xl font-black text-slate-800 mt-1" id="count-clase-B">0/0</h3>
+                    <p class="text-[8px] md:text-[9px] font-bold text-slate-400 uppercase mt-1">Gestionados</p>
+                </button>
+                <button onclick="toggleFiltro('clase', 'C')" id="btn-clase-C" class="bg-white p-3 md:p-4 rounded-3xl border border-slate-200 text-center hover:border-slate-400 hover:shadow-md transition-all active:scale-95 group relative overflow-hidden">
+                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest transition-colors">👋 Esporádicos (C)</p>
+                    <h3 class="text-xl md:text-2xl font-black text-slate-800 mt-1" id="count-clase-C">0/0</h3>
+                    <p class="text-[8px] md:text-[9px] font-bold text-slate-400 uppercase mt-1">Gestionados</p>
+                </button>
+            </div>
+
+            <div id="lista" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="col-span-1 md:col-span-2 text-center py-20">
+                    <div class="text-6xl mb-4 opacity-50">🧭</div>
+                    <p class="text-slate-400 font-bold uppercase tracking-widest text-[11px] leading-relaxed">Selecciona un Asesor, una zona en el Mapa<br>o usa el buscador para cargar la ruta.</p>
+                </div>
+            </div>
+            
+            <div id="contenedor-ver-mas" class="text-center mt-6 hidden">
+                <button onclick="cargarMasClientes()" class="bg-blue-100 text-blue-700 hover:bg-blue-600 hover:text-white px-8 py-3 rounded-full font-black text-xs uppercase tracking-widest transition-all shadow-sm">Cargar más clientes ⬇️</button>
+            </div>
+        </div>
+
+        <div id="vista-productos" class="hidden fade-in">
+            <div class="bg-white p-8 rounded-[40px] shadow-sm border border-slate-200 mb-8 text-center">
+                <h2 class="text-3xl font-black text-slate-800 tracking-tighter mb-2">Buscador de Top Compradores</h2>
+                <p class="text-xs text-slate-400 font-bold mb-8 uppercase tracking-widest">¿Cómo deseas buscar el producto?</p>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl mx-auto mb-2 text-left">
+                    <div class="bg-slate-50 p-6 rounded-3xl border border-slate-200">
+                        <p class="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-3">1️⃣ Búsqueda por Código Exacto</p>
+                        <input type="text" id="busc-prod-cod" placeholder="Ej: 15-01-000" class="w-full p-4 rounded-2xl border border-slate-200 outline-none focus:ring-2 focus:ring-blue-400 font-bold mb-3 uppercase text-sm">
+                        <button onclick="buscarPorCodigo()" id="btn-cod" class="w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg hover:bg-blue-700 transition-all active:scale-95">Analizar Código Directo</button>
+                    </div>
+                    <div class="bg-slate-50 p-6 rounded-3xl border border-slate-200">
+                        <p class="text-[10px] font-black text-purple-500 uppercase tracking-widest mb-3">2️⃣ Búsqueda por Descripción</p>
+                        <input type="text" id="busc-prod-des" placeholder="Ej: ANESTESICO" class="w-full p-4 rounded-2xl border border-slate-200 outline-none focus:ring-2 focus:ring-purple-400 font-bold mb-3 uppercase text-sm">
+                        <button onclick="buscarPorDesc()" id="btn-des" class="w-full bg-purple-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg hover:bg-purple-700 transition-all active:scale-95">Buscar en Productos</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="lista-productos-seleccion" class="max-w-2xl mx-auto mb-8 space-y-2"></div>
+
+            <div id="filtros-prod-container" class="max-w-3xl mx-auto mb-6 hidden fade-in space-y-3">
+                <div class="bg-white p-5 rounded-[30px] shadow-sm border border-slate-200">
+                    <div class="flex items-center justify-between mb-3">
+                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">👨‍💼 Filtro por Asesor</p>
+                        <button onclick="limpiarFiltrosProd()" id="btn-limpiar-filtros-prod" class="text-[9px] font-black text-rose-500 hover:text-rose-700 uppercase tracking-widest hidden">✕ Limpiar</button>
+                    </div>
+                    <div id="chip-prod-vendedores" class="flex flex-wrap gap-2"></div>
+                </div>
+                <div class="bg-white p-5 rounded-[30px] shadow-sm border border-slate-200">
+                    <div class="flex items-center gap-2 mb-3">
+                        <span class="text-lg">📍</span>
+                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest">Filtrar Zona Geográfica</p>
+                    </div>
+                    <div id="chip-prod-departamentos" class="flex flex-wrap gap-2"></div>
+                    <div id="chip-prod-municipios-container" class="hidden mt-4 pt-4 border-t border-slate-100">
+                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">🏘️ Municipio</p>
+                        <div id="chip-prod-municipios" class="flex flex-wrap gap-2"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="lista-resultados-top" class="space-y-4"></div>
+            
+            <div id="contenedor-ver-mas-prod" class="text-center mt-6 hidden">
+                <button onclick="cargarMasProd()" class="bg-purple-100 text-purple-700 hover:bg-purple-600 hover:text-white px-8 py-3 rounded-full font-black text-xs uppercase tracking-widest transition-all shadow-sm">Cargar más compradores ⬇️</button>
+            </div>
+        </div>
+
+        <div id="vista-reportes" class="hidden fade-in">
+            <div id="botones-abrir-bases" class="flex flex-col md:flex-row gap-4 mb-6">
+                <a href="https://docs.google.com/spreadsheets/d/14WJaC8VkcYAXIiO65Q9DDXh9RXhdUSg8120_L9mG9YY" target="_blank" class="flex-1 bg-emerald-600 text-white p-4 rounded-3xl font-black text-center text-xs uppercase tracking-widest shadow-md hover:bg-emerald-700 hover:shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2">📂 Abrir Base de Clientes (CRM)</a>
+                <a href="https://docs.google.com/spreadsheets/d/184yrmB_4BRtVWKAvGYNC3Y3qNsoN0x6DSKLme0kfdXw" target="_blank" class="flex-1 bg-emerald-600 text-white p-4 rounded-3xl font-black text-center text-xs uppercase tracking-widest shadow-md hover:bg-emerald-700 hover:shadow-lg transition-all active:scale-95 flex items-center justify-center gap-2">📊 Abrir Base de Ventas (SAP)</a>
+            </div>
+
+            <details id="panel-admin" class="hidden mb-8 bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+                <summary class="p-5 cursor-pointer font-bold text-slate-500 text-xs flex justify-between items-center uppercase tracking-widest outline-none hover:bg-slate-50">
+                    <span>⚙️ Panel de Configuración SAP</span>
+                    <span>▼</span>
+                </summary>
+
+                <div class="p-6 grid grid-cols-1 md:grid-cols-2 gap-6 bg-white border-t border-slate-100">
+                    <div class="bg-slate-50 p-6 rounded-[25px] border border-dashed border-blue-300 text-center hover:bg-blue-50 cursor-pointer transition-colors" onclick="document.getElementById('csv-ventas').click()">
+                        <input type="file" id="csv-ventas" accept=".csv, .xlsx, .xls" class="hidden" onchange="iniciarProcesoArchivo(this, 'Ventas')">
+                        <span class="text-blue-600 font-black text-sm block mb-2">📥 CARGAR VENTAS</span>
+                        <p class="text-[9px] font-bold text-blue-400 mb-2">Acepta .XLSX o .CSV</p>
+                        <div id="progreso-ventas" class="hidden w-full bg-gray-200 rounded-full h-2 mt-3">
+                            <div id="barra-ventas" class="bg-blue-600 h-2 rounded-full transition-all" style="width: 0%"></div>
+                        </div>
+                        <span id="estado-ventas" class="text-[10px] text-slate-400 font-bold mt-2 block"></span>
+                    </div>
+
+                    <div class="bg-slate-50 p-6 rounded-[25px] border border-dashed border-purple-300 text-center hover:bg-purple-50 cursor-pointer transition-colors" onclick="document.getElementById('csv-clientes').click()">
+                        <input type="file" id="csv-clientes" accept=".csv, .xlsx, .xls" class="hidden" onchange="iniciarProcesoArchivo(this, 'Clientes')">
+                        <span class="text-purple-600 font-black text-sm block mb-2">📥 CARGAR CLIENTES</span>
+                        <p class="text-[9px] font-bold text-purple-400 mb-2">Acepta .XLSX o .CSV</p>
+                        <div id="progreso-clientes" class="hidden w-full bg-gray-200 rounded-full h-2 mt-3">
+                            <div id="barra-clientes" class="bg-purple-600 h-2 rounded-full transition-all" style="width: 0%"></div>
+                        </div>
+                        <span id="estado-clientes" class="text-[10px] text-slate-400 font-bold mt-2 block"></span>
+                    </div>
+                </div>
+            </details>
+
+            <div class="bg-slate-900 text-white p-8 rounded-[40px] shadow-xl mb-8 text-center relative overflow-hidden">
+                <div class="absolute top-0 right-0 w-32 h-32 bg-blue-500 rounded-full mix-blend-multiply filter blur-2xl opacity-50 animate-pulse"></div>
+                <h2 id="titulo-auditoria" class="text-3xl font-black tracking-tighter mb-2 relative z-10">Módulo de Auditoría</h2>
+                <p id="subtitulo-auditoria" class="text-xs text-slate-400 font-bold uppercase tracking-widest relative z-10">Supervisión Estratégica de Cartera</p>
+            </div>
+
+            <div id="bloque-fecha-admin" class="bg-slate-900 text-white p-5 rounded-[30px] shadow-md mb-6 hidden">
+                <div class="flex items-center justify-between gap-3 flex-wrap">
+                    <div class="flex items-center gap-3">
+                        <span class="text-2xl">📅</span>
+                        <div>
+                            <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Viendo actividad de</p>
+                            <h3 id="fecha-admin-titulo" class="text-base font-black leading-none">Hoy</h3>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <input type="date" id="fecha-admin-input" class="text-[11px] font-bold text-slate-700 bg-white border-none rounded-full px-3 py-2 outline-none focus:ring-2 focus:ring-blue-400" onchange="cambiarFechaAdmin()">
+                        <button id="btn-fecha-admin-hoy" onclick="resetFechaAdmin()" class="hidden text-[10px] font-black text-amber-300 hover:text-amber-200 uppercase tracking-widest px-3 py-2 rounded-full hover:bg-white/10 transition-all">← Hoy</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="bloque-cockpits-equipo" class="bg-white p-6 rounded-[30px] border border-slate-200 shadow-sm mb-8 hidden">
+                <div class="flex items-center justify-between gap-3 mb-6 flex-wrap">
+                    <div class="flex items-center gap-3">
+                        <span class="text-2xl">🎯</span>
+                        <div>
+                            <h3 class="text-lg font-black text-slate-800 leading-none">Cockpits del Equipo</h3>
+                            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Cumplimiento de meta diaria por asesor</p>
+                        </div>
+                    </div>
+                    <button onclick="cargarCockpitsEquipo()" class="text-[10px] font-black text-blue-600 hover:text-blue-800 uppercase tracking-widest px-3 py-2 rounded-full hover:bg-blue-50 transition-all">🔄 Actualizar</button>
+                </div>
+                <div id="grid-cockpits-equipo" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                    <p class="text-xs text-slate-400 col-span-full text-center py-4 animate-pulse">Cargando equipo...</p>
+                </div>
+            </div>
+
+            <div id="bloque-timelines-equipo" class="bg-white p-6 rounded-[30px] border border-slate-200 shadow-sm mb-8 hidden">
+                <div class="flex items-center justify-between gap-3 mb-5 flex-wrap">
+                    <div class="flex items-center gap-3">
+                        <span class="text-2xl">🔍</span>
+                        <div>
+                            <h3 class="text-lg font-black text-slate-800 leading-none">Actividad del Día por Asesor</h3>
+                            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Detecta cargas tardías o atracones al final del día</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <button onclick="switchVistaAdmin('timeline')" id="btn-vista-timeline" class="bg-blue-600 text-white px-4 py-2 rounded-full font-black text-[10px] uppercase tracking-widest shadow-md transition-all">🕐 Timeline</button>
+                        <button onclick="switchVistaAdmin('heatmap')" id="btn-vista-heatmap" class="bg-slate-100 text-slate-600 hover:bg-slate-200 px-4 py-2 rounded-full font-black text-[10px] uppercase tracking-widest transition-all">🔥 Heatmap</button>
+                        <button onclick="cargarTimelinesEquipo()" class="text-[10px] font-black text-blue-600 hover:text-blue-800 uppercase tracking-widest px-3 py-2 rounded-full hover:bg-blue-50 transition-all border border-blue-200">↻ Refrescar</button>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2 flex-wrap mb-4 pb-4 border-b border-slate-100">
+                    <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest">📅 Fecha:</span>
+                    <input type="date" id="fecha-timelines-input" class="text-[11px] font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-full px-3 py-1.5 outline-none focus:ring-2 focus:ring-blue-400" onchange="cambiarFechaDesdeTimelines()">
+                    <button id="btn-fecha-timelines-hoy" onclick="resetFechaAdmin()" class="hidden text-[10px] font-black text-blue-600 hover:text-blue-800 uppercase tracking-widest px-3 py-1.5 rounded-full hover:bg-blue-50 transition-all">← Hoy</button>
+                    <span class="text-[9px] font-bold text-slate-400 ml-auto">Sincronizado con el panel global ↑</span>
+                </div>
+                <div id="vista-timeline-equipo" class="space-y-3"></div>
+                <div id="vista-heatmap-equipo" class="hidden overflow-x-auto"></div>
+            </div>
+
+            <div id="bloque-informe-pdf" class="bg-white p-6 rounded-[30px] border border-slate-200 shadow-sm mb-8 hidden">
+                <div class="flex items-center justify-between gap-3 mb-5 flex-wrap">
+                    <div class="flex items-center gap-3">
+                        <span class="text-2xl">📄</span>
+                        <div>
+                            <h3 class="text-lg font-black text-slate-800 leading-none">Informe PDF de Interacciones</h3>
+                            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Por tipo y por vendedor</p>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button onclick="switchModoPDF('mes')" id="btn-modo-pdf-mes" class="bg-blue-600 text-white px-4 py-2 rounded-full font-black text-[10px] uppercase tracking-widest shadow-md transition-all">📅 Por Mes</button>
+                        <button onclick="switchModoPDF('rango')" id="btn-modo-pdf-rango" class="bg-slate-100 text-slate-600 hover:bg-slate-200 px-4 py-2 rounded-full font-black text-[10px] uppercase tracking-widest transition-all">📆 Por Rango</button>
+                    </div>
+                </div>
+
+                <div id="pdf-modo-mes" class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Mes</p>
+                        <select id="pdf-mes" class="w-full p-4 rounded-2xl bg-slate-50 border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 font-bold text-sm text-slate-700"></select>
+                    </div>
+                    <div>
+                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Vendedor</p>
+                        <select id="pdf-vendedor" class="w-full p-4 rounded-2xl bg-slate-50 border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 font-bold text-sm text-slate-700">
+                            <option value="">🌍 Todos los asesores</option>
+                        </select>
+                    </div>
+                    <div class="flex items-end">
+                        <button onclick="generarInformePDF()" id="btn-generar-pdf" class="w-full bg-rose-600 hover:bg-rose-700 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-md transition-all active:scale-95">📄 Generar Informe</button>
+                    </div>
+                </div>
+
+                <div id="pdf-modo-rango" class="hidden grid-cols-1 md:grid-cols-4 gap-4 grid">
+                    <div>
+                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Desde</p>
+                        <input type="date" id="pdf-rango-desde" class="w-full p-4 rounded-2xl bg-slate-50 border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 font-bold text-sm text-slate-700">
+                    </div>
+                    <div>
+                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Hasta</p>
+                        <input type="date" id="pdf-rango-hasta" class="w-full p-4 rounded-2xl bg-slate-50 border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 font-bold text-sm text-slate-700">
+                    </div>
+                    <div>
+                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Vendedor</p>
+                        <select id="pdf-rango-vendedor" class="w-full p-4 rounded-2xl bg-slate-50 border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 font-bold text-sm text-slate-700">
+                            <option value="">🌍 Todos los asesores</option>
+                        </select>
+                    </div>
+                    <div class="flex items-end">
+                        <button onclick="generarInformeRangoPDF()" id="btn-generar-pdf-rango" class="w-full bg-rose-600 hover:bg-rose-700 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-md transition-all active:scale-95">📄 Generar Informe</button>
+                    </div>
+                </div>
+
+                <div id="pdf-resultado" class="mt-4 hidden"></div>
+            </div>
+
+            <div id="bloque-estado-conexion" class="bg-white p-6 rounded-[30px] border border-slate-200 shadow-sm mb-8">
+                <div class="flex items-center gap-3 mb-6">
+                    <span class="text-2xl">🟢</span>
+                    <div>
+                        <h3 class="text-lg font-black text-slate-800 leading-none">Estado de Conexión</h3>
+                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Último ingreso al CRM por Asesor</p>
+                    </div>
+                </div>
+                <div id="rep-estado-usuarios" class="grid grid-cols-1 md:grid-cols-3 gap-3 max-h-60 overflow-y-auto pr-2 no-scrollbar">
+                    <p class="text-xs text-slate-400 col-span-3 text-center py-4 animate-pulse">Consultando servidor...</p>
+                </div>
+            </div>
+
+            <div class="bg-white p-6 rounded-[30px] border border-slate-200 shadow-sm mb-8">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">1. Selecciona Vendedor</p>
+                        <select id="rep-vendedor" onchange="loadReportes()" class="w-full p-4 rounded-2xl bg-slate-50 border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 font-bold text-sm text-slate-700">
+                            <option value="">🌍 Todos los asesores (Global)</option>
+                        </select>
+                    </div>
+                    <div>
+                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">2. Filtro Mensual</p>
+                        <select id="rep-mes" onchange="loadReportes()" class="w-full p-4 rounded-2xl bg-slate-50 border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 font-bold text-sm text-slate-700">
+                            </select>
+                    </div>
+                </div>
+            </div>
+
+            <div id="rep-loader" class="hidden text-center py-20">
+                <div class="animate-spin rounded-full h-12 w-12 border-t-4 border-b-4 border-blue-600 mx-auto mb-4"></div>
+                <p class="text-blue-600 font-black text-xs uppercase tracking-widest animate-pulse">Cruzando bases de datos...</p>
+            </div>
+
+            <div id="rep-contenido" class="hidden">
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8" id="rep-kpis"></div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <div class="col-span-1 md:col-span-2 bg-white p-6 rounded-[30px] border border-slate-200 shadow-sm">
+                        <p class="text-[10px] font-black text-slate-400 uppercase mb-4 text-center tracking-widest">Avance de Cobertura por Clasificación</p>
+                        <div class="relative h-64 w-full">
+                            <canvas id="chartProgresoAdmin"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="col-span-1 bg-white p-6 rounded-[30px] border border-slate-200 shadow-sm flex flex-col">
+                        <p class="text-[10px] font-black text-blue-500 uppercase mb-4 tracking-widest text-center">Interacciones por Usuario</p>
+                        <div id="rep-alias-list" class="flex-1 overflow-y-auto pr-2 space-y-2"></div>
+                    </div>
+                </div>
+
+                <div class="bg-white p-6 rounded-[30px] border border-slate-200 shadow-sm mb-8">
+                    <div class="flex items-center gap-3 mb-6">
+                        <span class="text-2xl">👥</span>
+                        <div>
+                            <h3 class="text-lg font-black text-slate-800 leading-none">Gestiones por Usuario</h3>
+                            <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Detalle de vendedores gestionados por cada usuario</p>
+                        </div>
+                    </div>
+                    <div id="rep-resumen-usuarios" class="space-y-3"></div>
+                </div>
+
+                <div class="bg-white p-6 rounded-[30px] border border-rose-200 shadow-sm mb-8 relative overflow-hidden">
+                    <div class="flex flex-col md:flex-row items-start md:items-center justify-between mb-4 gap-4">
+                        <div class="flex items-center gap-3">
+                            <span class="text-2xl">🚨</span>
+                            <div>
+                                <h3 class="text-lg font-black text-rose-700 leading-none">Radar de Fugas (VIP)</h3>
+                                <p class="text-[10px] font-bold text-rose-400 uppercase tracking-widest mt-1">Compraron en año pasado, pero llevan $0 este año</p>
+                            </div>
+                        </div>
+                        <span id="radar-fugas-count" class="bg-rose-100 text-rose-700 font-black text-lg px-4 py-2 rounded-2xl border border-rose-200">0 Alertas</span>
+                    </div>
+                    <div id="rep-riesgo-lista" class="space-y-3 max-h-96 overflow-y-auto pr-2 no-scrollbar"></div>
+                </div>
+
+                <div class="bg-white p-6 rounded-[30px] border border-slate-200 shadow-sm overflow-hidden">
+                    <div class="flex items-center gap-3 mb-6">
+                        <span class="text-2xl">📜</span>
+                        <h3 class="text-lg font-black text-slate-800">Bitácora de Gestiones</h3>
+                    </div>
+                    
+                    <div class="mb-4">
+                        <h4 id="rep-titulo-hoy" class="text-[10px] font-black text-emerald-500 uppercase tracking-widest mb-2 bg-emerald-50 px-3 py-1 inline-block rounded-lg border border-emerald-200">Registros de Hoy</h4>
+                        <div class="overflow-x-auto border border-slate-200 rounded-2xl">
+                            <table class="w-full text-left text-xs whitespace-nowrap">
+                                <thead class="text-slate-400 bg-slate-50 border-b border-slate-200">
+                                    <tr class="uppercase text-[9px]">
+                                        <th class="py-3 pl-3 pr-4">Fecha/Hora</th>
+                                        <th class="py-3 pr-4">Alias/Usuario</th>
+                                        <th class="py-3 pr-4">Vendedor</th>
+                                        <th class="py-3 pr-4">Cliente</th>
+                                        <th class="py-3 pr-4">Acuerdo / Nota</th>
+                                        <th class="py-3 pr-4">Tipo</th>
+                                        <th class="py-3">GPS</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="rep-bitacora-hoy" class="text-slate-700 font-medium divide-y divide-slate-100"></tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="mt-8">
+                        <h4 class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4 px-3 py-1 inline-block rounded-lg border border-slate-200 bg-slate-50">Histórico del Mes Seleccionado</h4>
+                        <div id="rep-bitacora-hist" class="space-y-4"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="rep-vacio" class="text-center py-20 hidden">
+                <div class="text-6xl mb-4 opacity-50">📉</div>
+                <p class="text-slate-400 font-bold uppercase tracking-widest text-[11px] leading-relaxed">Selecciona un filtro para auditar la ruta.</p>
+            </div>
+        </div>
+
+    </main>
+  </div>
+
+  <div id="modal" class="modal opacity-0 pointer-events-none fixed inset-0 flex items-center justify-center z-[200] p-4 bg-slate-900/80 backdrop-blur-md">
+      <div class="bg-white w-full max-w-4xl max-h-[90vh] overflow-y-auto no-scrollbar rounded-[50px] shadow-2xl p-6 md:p-10 transform scale-95 transition-all relative">
+          
+          <div class="sticky top-0 z-[100] flex justify-end -mt-4 -mr-4">
+              <button onclick="closeM()" class="bg-slate-100/80 backdrop-blur-md border border-slate-200 rounded-full w-14 h-14 flex items-center justify-center text-slate-500 hover:text-rose-600 hover:bg-rose-50 shadow-sm text-3xl font-light transition-all active:scale-95">×</button>
+          </div>
+
+          <div id="modal-loader" class="absolute inset-0 bg-white/90 backdrop-blur-[2px] z-50 hidden flex-col items-center justify-center rounded-[50px]">
+              <div class="relative flex justify-center items-center mb-6">
+                  <div class="absolute animate-ping w-20 h-20 rounded-full bg-blue-400 opacity-20"></div>
+                  <div class="animate-spin rounded-full h-20 w-20 border-t-4 border-b-4 border-blue-600 z-10"></div>
+                  <span class="absolute text-2xl">⚙️</span>
+              </div>
+              <h3 class="text-xl font-black text-slate-800">Procesando Cliente</h3>
+              <p class="text-[10px] text-blue-600 font-bold uppercase tracking-[0.2em] mt-2 animate-pulse">Analizando rendimiento financiero...</p>
+          </div>
+
+          <div class="text-center mb-8 -mt-6">
+              <h3 id="mNom" class="text-3xl font-black text-slate-800 leading-tight pr-10">--</h3>
+              <p id="mCod" class="text-2xl font-black text-blue-600 mt-2 bg-blue-50 px-6 py-2 rounded-full inline-block font-mono tracking-widest uppercase">--</p>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+              <div class="bg-slate-50 p-4 rounded-[25px] border text-center flex flex-col justify-center items-center">
+                  <p class="text-[9px] font-black text-slate-400 uppercase mb-1">📍 Ubicación</p>
+                  <p id="mDir" class="text-xs font-bold text-slate-700">--</p>
+                  <p id="mDep" class="text-[10px] font-black text-blue-500 mt-1 uppercase">--</p>
+              </div>
+              <div class="bg-slate-50 p-4 rounded-[25px] border text-center flex flex-col justify-center items-center">
+                  <p class="text-[9px] font-black text-slate-400 uppercase mb-1">📞 Teléfonos</p>
+                  <p id="mTel1" class="text-sm font-black text-slate-800">--</p>
+                  <p id="mTel2" class="text-sm font-black text-slate-800">--</p>
+              </div>
+              <div class="bg-slate-50 p-4 rounded-[25px] border text-center flex flex-col justify-center items-center">
+                  <p class="text-[9px] font-black text-slate-400 uppercase mb-1">👤 Vendedor</p>
+                  <p id="mVend" class="text-xs font-bold text-slate-700 uppercase">--</p>
+              </div>
+          </div>
+          
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+              <div class="space-y-4">
+                  <div class="bg-slate-50 p-6 rounded-[30px] border relative">
+                      <p class="text-[10px] font-black text-slate-400 uppercase mb-3 text-center">📅 Ventas por Año</p>
+                      <div id="mAnios" class="space-y-2 text-sm font-bold"></div>
+                      <div id="mCrecimiento"></div>
+                  </div>
+                  <div class="bg-blue-50 p-6 rounded-[30px] border border-blue-100">
+                      <p class="text-[10px] font-black text-blue-500 uppercase mb-3 text-center">📆 Detalle Mensual</p>
+                      <div id="mMeses" class="space-y-2 text-sm font-bold"></div>
+                  </div>
+              </div>
+              
+              <div class="bg-slate-50 p-6 rounded-[30px] border">
+                  <p class="text-[10px] font-black text-slate-400 uppercase mb-3 text-center">🏆 Top 10 Productos</p>
+                  <div id="mTop" class="space-y-2 text-xs font-bold text-slate-700"></div>
+              </div>
+          </div>
+
+          <div class="bg-white p-6 rounded-[30px] border border-slate-200 mb-8 shadow-sm">
+              <p class="text-[10px] font-black text-slate-400 uppercase mb-4 text-center">📈 Evolución de Ventas</p>
+              <div class="relative h-56 w-full">
+                  <canvas id="graficoVentas"></canvas>
+              </div>
+          </div>
+
+          <div class="bg-slate-50 p-6 rounded-[30px] border mb-8 overflow-hidden">
+              <p class="text-[10px] font-black text-slate-400 uppercase mb-3 text-center">📜 Últimas Facturas</p>
+              <div class="overflow-x-auto">
+                  <table class="w-full text-left text-xs">
+                      <thead class="text-slate-400 border-b border-slate-200"><tr class="uppercase"><th class="pb-2">Fecha</th><th class="pb-2">Correlativo</th><th class="pb-2 text-right">Total Factura</th></tr></thead>
+                      <tbody id="mLog" class="text-slate-700 font-bold"></tbody>
+                  </table>
+              </div>
+          </div>
+
+          <div class="bg-indigo-50 p-6 rounded-[30px] border border-indigo-100 mb-8 overflow-hidden">
+              <p class="text-[10px] font-black text-indigo-500 uppercase mb-3 text-center">💬 Memoria de Gestiones Anteriores</p>
+              <div class="overflow-x-auto max-h-48 no-scrollbar">
+                  <table class="w-full text-left text-xs">
+                      <thead class="text-indigo-400 border-b border-indigo-200">
+                          <tr class="uppercase text-[9px]">
+                              <th class="pb-2 pr-2">Fecha</th>
+                              <th class="pb-2 pr-2">Alias/Usr</th>
+                              <th class="pb-2 pr-2">Interacción</th>
+                              <th class="pb-2">Acuerdo / Nota</th>
+                          </tr>
+                      </thead>
+                      <tbody id="mHistorial" class="text-indigo-900 font-bold divide-y divide-indigo-100"></tbody>
+                  </table>
+              </div>
+          </div>
+
+          <div class="bg-white border border-blue-200 p-6 rounded-[30px] shadow-sm mb-6">
+              <p class="text-[10px] font-black text-blue-500 uppercase mb-4 tracking-widest">Registrar Interacción de Hoy</p>
+              
+              <div class="flex flex-wrap gap-2 mb-4 justify-center">
+                  <label class="relative cursor-pointer flex-1 min-w-[120px]">
+                      <input type="radio" name="tipoInteraccion" value="Visita en Persona" class="peer sr-only" checked>
+                      <div class="p-3 text-center bg-slate-50 border border-slate-200 rounded-2xl text-[10px] md:text-[11px] font-bold text-slate-500 transition-all peer-checked:bg-blue-100 peer-checked:border-blue-500 peer-checked:text-blue-800">🚗 Visita (GPS)</div>
+                  </label>
+                  <label class="relative cursor-pointer flex-1 min-w-[120px]">
+                      <input type="radio" name="tipoInteraccion" value="Llamada Telefónica" class="peer sr-only">
+                      <div class="p-3 text-center bg-slate-50 border border-slate-200 rounded-2xl text-[10px] md:text-[11px] font-bold text-slate-500 transition-all peer-checked:bg-blue-100 peer-checked:border-blue-500 peer-checked:text-blue-800">📞 Llamada</div>
+                  </label>
+                  <label class="relative cursor-pointer flex-1 min-w-[120px]">
+                      <input type="radio" name="tipoInteraccion" value="Contacto WhatsApp" class="peer sr-only">
+                      <div class="p-3 text-center bg-slate-50 border border-slate-200 rounded-2xl text-[10px] md:text-[11px] font-bold text-slate-500 transition-all peer-checked:bg-blue-100 peer-checked:border-blue-500 peer-checked:text-blue-800">📱 WhatsApp</div>
+                  </label>
+                  <label class="relative cursor-pointer flex-1 min-w-[120px]">
+                      <input type="radio" name="tipoInteraccion" value="Vino a Sala de Ventas" class="peer sr-only">
+                      <div class="p-3 text-center bg-slate-50 border border-slate-200 rounded-2xl text-[10px] md:text-[11px] font-bold text-slate-500 transition-all peer-checked:bg-blue-100 peer-checked:border-blue-500 peer-checked:text-blue-800">🏪 Mostrador</div>
+                  </label>
+                  <label class="relative cursor-pointer flex-1 min-w-[120px]">
+                      <input type="radio" name="tipoInteraccion" value="No se obtuvo respuesta por llamada" class="peer sr-only">
+                      <div class="p-3 text-center bg-slate-50 border border-slate-200 rounded-2xl text-[10px] md:text-[11px] font-bold text-slate-500 transition-all peer-checked:bg-rose-100 peer-checked:border-rose-500 peer-checked:text-rose-800 shadow-sm">📵 Sin Respuesta</div>
+                  </label>
+              </div>
+
+              <textarea id="nota" rows="2" class="w-full p-4 bg-slate-50 rounded-2xl text-sm border border-slate-200 focus:ring-2 focus:ring-blue-400 outline-none resize-none mb-4" placeholder="Escribe un resumen de lo acordado con el cliente..."></textarea>
+              <button onclick="saveV()" id="btnSave" class="w-full bg-blue-600 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg hover:bg-blue-700 active:scale-95 transition-all">✅ GUARDAR INTERACCIÓN</button>
+          </div>
+      </div>
+  </div>
+
+  <script>
+    let DATA = [];
+    let DATA_FILTRADA = []; 
+    let PAGINA_ACTUAL = 20; 
+    let chartInstancia = null;
+    let chartInstanciaAdmin = null;
+    
+    let RESULTADOS_PROD_DATA = [];
+    let PAGINA_PROD = 20;
+    let filtrosProd = { vend: null, dep: null, mun: null };
+
+    let filtrosActivos = { vend: null, dep: null, mun: null, search: '', clase: null, soloGestionados: false, tipoCli: null };
+    
+    let inputTimeout = null;
+    let intervaloTips = null;
+    const TIPS_CARGA = [
+        "Enviar un mensaje y no recibir respuesta no cuenta como Interacción.",
+        "Llamar a un cliente y no recibir respuesta no cuenta como interacción.",
+        "Si un cliente no ha respondido más de 3 veces, verifica su información de contacto — puede que el número no esté correcto en el sistema.",
+        "Recuerda: LLAMAR tiene más impacto que enviar un WhatsApp.",
+        "El mejor momento para llamar es entre 9am y 11am — evita los lunes en la mañana.",
+        "Un cliente que no compra este año pero compró el anterior está en riesgo real. Priorízalo.",
+        "Una visita en persona vale más que 10 mensajes de WhatsApp.",
+        "Cuando visites a un cliente, lleva siempre una propuesta o novedad — nunca llegues con las manos vacías.",
+        "Registra la visita inmediatamente después de hacerla, no al final del día. La hora queda registrada en tu rendimiento del día.",
+        "Tu cartera de clientes Clase A genera el 80% de tus ventas.",
+        "Un cliente satisfecho no necesita que lo convenzas — solo necesita que lo recuerdes.",
+        "Un teléfono incorrecto en el sistema puede costarte meses de ventas perdidas.",
+        "Llamarle al cliente para actualizar sus datos es una buena excusa para que te recuerde!",
+        "Actualizar los datos en SH de un cliente tarda 1 minuto. Perderlo por datos desactualizados puede costarte mucho más.",
+        "Un cliente que dejó de comprar 60 días te dice algo. Llamalo antes de que sean 120.",
+        "Si vendiste lo mismo durante 6 meses, está listo para algo nuevo. Sugerilo.",
+        "Cuando un cliente reduce su frecuencia, la competencia ya está adentro.",
+        "Tus 10 mejores clientes merecen una visita al mes, sí o sí.",
+        "Una llamada de 2 minutos para felicitar un cumpleaños vale más que un descuento del 5%.",
+        "Antes de cada llamada, revisá la última interacción registrada — el cliente lo notará.",
+        "Si un cliente no responde, validá primero el número antes de marcarlo como inactivo.",
+        "Registrá la interacción en caliente. Si esperás al final del día, perdés los detalles.",
+        "Empezá el día por los Clase A, no por los más fáciles.",
+        "Una visita sin objetivo definido es una visita perdida.",
+        "Conocer 3 productos nuevos por semana te diferencia del 80% de la fuerza de venta.",
+        "La promo que no comunicás, no existe para el cliente."
+    ];
+    let usuarioLogueado = "";
+    let usuarioAlias = "";
+    let usuarioRol = "";
+    let metaDiariaUsuario = 10;
+    let atendidosHoyUsuario = 0;
+    let modoTareas = true; 
+    let intervaloProgreso = null; 
+    
+    let DATA_VISITAS_ADMIN = []; 
+    let HOY_SERVER = "";
+
+    const dptosElSalvador = ["AHUACHAPAN", "SANTA ANA", "SONSONATE", "CHALATENANGO", "LA LIBERTAD", "SAN SALVADOR", "CUSCATLAN", "LA PAZ", "CABAÑAS", "SAN VICENTE", "USULUTAN", "SAN MIGUEL", "MORAZAN", "LA UNION"];
+
+    function iniciarApp() {
+        setTimeout(() => {
+            document.getElementById('pantalla-carga').classList.add('opacity-0');
+            setTimeout(() => {
+                document.getElementById('pantalla-carga').style.display = 'none';
+                document.getElementById('pantalla-login').classList.remove('hidden');
+            }, 500);
+        }, 800);
+    }
+    
+    setTimeout(iniciarApp, 500); // Forzar el inicio sin depender de eventos del navegador
+
+    function ejecutarLogin() {
+        const e = document.getElementById('login-email').value;
+        const p = document.getElementById('login-pin').value;
+        const btn = document.getElementById('btn-login');
+        const err = document.getElementById('login-error');
+        
+        if(!e || !p) { err.innerText = "Ingresa tu correo y PIN"; err.classList.remove('hidden'); return; }
+        
+        btn.innerText = "Validando credenciales..."; btn.disabled = true; err.classList.add('hidden');
+        
+        google.script.run.withSuccessHandler(res => {
+            if(res.exito) {
+                usuarioLogueado = res.email;
+                usuarioAlias = res.alias;
+                usuarioRol = res.rol;
+                metaDiariaUsuario = res.metaDiaria || 10;
+                document.getElementById('pantalla-login').classList.add('hidden');
+                document.getElementById('app-container').classList.remove('hidden');
+                document.getElementById('user-info').innerText = `${res.rol} | ${usuarioAlias}`;
+
+                if(res.rol === 'Admin') {
+                    document.getElementById('panel-admin').classList.remove('hidden');
+                    document.getElementById('tab-reportes').innerText = "📈 AUDITORÍA";
+                    document.getElementById('cockpit-label').innerText = "Meta del Equipo Hoy";
+                } else {
+                    document.getElementById('tab-reportes').innerText = "📊 MI RESUMEN";
+                    document.getElementById('bloque-estado-conexion').classList.add('hidden');
+                    document.getElementById('botones-abrir-bases').classList.add('hidden');
+                    document.getElementById('titulo-auditoria').innerText = "Mi Rendimiento";
+                    document.getElementById('subtitulo-auditoria').innerText = "Selecciona tu cartera para evaluar tu rendimiento";
+                }
+
+                actualizarDashboard();
+                cargarCockpit();
+                if (usuarioRol !== 'Admin') cargarTimelineUsuario();
+                loadC();
+            } else {
+                btn.innerText = "Ingresar al Sistema"; btn.disabled = false;
+                err.innerText = res.mensaje; err.classList.remove('hidden');
+            }
+        }).withFailureHandler(error => {
+            btn.innerText = "Ingresar al Sistema"; btn.disabled = false;
+            err.innerText = "Error de red. Intenta de nuevo."; err.classList.remove('hidden');
+        }).verificarAccesoUsuario(e, p);
+    }
+
+    function switchTab(tab) {
+        document.getElementById('tab-rutas').classList.remove('bg-blue-600', 'text-white', 'shadow-md');
+        document.getElementById('tab-tareas').classList.remove('bg-blue-600', 'text-white', 'shadow-md');
+        document.getElementById('tab-productos').classList.remove('bg-purple-600', 'text-white', 'shadow-md');
+        document.getElementById('tab-reportes').classList.remove('bg-slate-900', 'text-white', 'shadow-md');
+        
+        document.getElementById('tab-rutas').classList.add('text-slate-500', 'hover:bg-slate-50');
+        document.getElementById('tab-tareas').classList.add('text-slate-500', 'hover:bg-slate-50');
+        document.getElementById('tab-productos').classList.add('text-slate-500', 'hover:bg-slate-50');
+        document.getElementById('tab-reportes').classList.add('text-slate-600', 'bg-slate-100');
+
+        document.getElementById('vista-rutas').classList.add('hidden');
+        document.getElementById('vista-productos').classList.add('hidden');
+        document.getElementById('vista-reportes').classList.add('hidden');
+
+        if(tab === 'rutas') {
+            modoTareas = false;
+            document.getElementById('vista-rutas').classList.remove('hidden');
+            document.getElementById('contenedor-mapa').classList.remove('hidden');
+            document.getElementById('tab-rutas').classList.add('bg-blue-600', 'text-white', 'shadow-md');
+            document.getElementById('tab-rutas').classList.remove('text-slate-500', 'hover:bg-slate-50');
+            aplicarFiltros();
+        } else if (tab === 'tareas') {
+            modoTareas = true;
+            document.getElementById('vista-rutas').classList.remove('hidden');
+            document.getElementById('contenedor-mapa').classList.add('hidden'); 
+            document.getElementById('tab-tareas').classList.add('bg-blue-600', 'text-white', 'shadow-md');
+            document.getElementById('tab-tareas').classList.remove('text-slate-500', 'hover:bg-slate-50');
+            aplicarFiltros();
+        } else if (tab === 'productos') {
+            document.getElementById('vista-productos').classList.remove('hidden');
+            document.getElementById('tab-productos').classList.add('bg-purple-600', 'text-white', 'shadow-md');
+            document.getElementById('tab-productos').classList.remove('text-slate-500', 'hover:bg-slate-50');
+        } else if (tab === 'reportes') {
+            document.getElementById('vista-reportes').classList.remove('hidden');
+            document.getElementById('tab-reportes').classList.add('bg-slate-900', 'text-white', 'shadow-md');
+            document.getElementById('tab-reportes').classList.remove('text-slate-600', 'bg-slate-100');
+            if(usuarioRol === 'Admin') {
+                fetchEstadoUsuarios();
+                document.getElementById('bloque-fecha-admin').classList.remove('hidden');
+                document.getElementById('bloque-cockpits-equipo').classList.remove('hidden');
+                document.getElementById('bloque-timelines-equipo').classList.remove('hidden');
+                document.getElementById('bloque-informe-pdf').classList.remove('hidden');
+                inicializarFechaAdmin();
+                poblarSelectorMesesPDF();
+                cargarCockpitsEquipo();
+                cargarTimelinesEquipo();
+            }
+            if(DATA_VISITAS_ADMIN.length === 0) fetchVisitasAdmin();
+        }
+    }
+
+    function actualizarDashboard() {
+        google.script.run.withSuccessHandler(function(kpis) {
+            if(kpis.error) return;
+            document.getElementById('kpi-ventas').innerText = parseInt(kpis.ventas).toLocaleString('es-SV');
+            document.getElementById('kpi-clientes').innerText = parseInt(kpis.clientes).toLocaleString('es-SV');
+            document.getElementById('kpi-fecha-ventas').innerText = "Carga: " + kpis.fechaVentas;
+            document.getElementById('kpi-fecha-clientes').innerText = "Carga: " + kpis.fechaClientes;
+        }).obtenerDatosKPIs();
+    }
+
+    function cargarCockpit() {
+        const handler = google.script.run.withSuccessHandler(function(res) {
+            if (!res || !res.exito) return;
+            metaDiariaUsuario = res.meta || metaDiariaUsuario;
+            atendidosHoyUsuario = res.atendidos || 0;
+            actualizarCockpit(atendidosHoyUsuario, metaDiariaUsuario);
+        });
+        if (usuarioRol === 'Admin') {
+            const fechaAdmin = FECHA_ADMIN_SEL ? yyyymmddToDdmmyyyy(FECHA_ADMIN_SEL) : null;
+            handler.obtenerCockpitAgregado(fechaAdmin);
+        } else {
+            const fechaUsr = FECHA_USUARIO_SEL ? yyyymmddToDdmmyyyy(FECHA_USUARIO_SEL) : null;
+            handler.obtenerCockpitDiario(usuarioLogueado, fechaUsr);
+        }
+    }
+
+    function actualizarCockpit(atendidos, meta) {
+        const arco = document.getElementById('cockpit-arco');
+        const fraccion = document.getElementById('cockpit-fraccion');
+        const pct = document.getElementById('cockpit-pct');
+        const estado = document.getElementById('cockpit-estado');
+        if (!arco) return;
+
+        const m = Math.max(1, meta || 1);
+        const a = Math.max(0, atendidos || 0);
+        const pctNum = Math.min(100, Math.round((a / m) * 100));
+
+        arco.setAttribute('stroke-dasharray', pctNum + ' 100');
+
+        let color = '#f43f5e';
+        let estadoTxt = 'Faltan ' + Math.max(0, m - a);
+        if (pctNum >= 100) {
+            color = '#10b981';
+            estadoTxt = '🎯 Meta cumplida';
+        } else if (pctNum >= 50) {
+            color = '#f59e0b';
+        }
+        arco.setAttribute('stroke', color);
+
+        fraccion.innerText = a + '/' + m;
+        pct.innerText = pctNum + '%';
+        estado.innerText = estadoTxt;
+    }
+
+    const TIMELINE_HORA_INI = 8;
+    const TIMELINE_HORA_FIN = 18;
+    let FECHA_USUARIO_SEL = null;
+    let FECHA_ADMIN_SEL = null;
+
+    function hoyYYYYMMDD() {
+        const d = new Date();
+        return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+    }
+    function hoyDDMMYYYY() {
+        const d = new Date();
+        return String(d.getDate()).padStart(2,'0') + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + d.getFullYear();
+    }
+    function yyyymmddToDdmmyyyy(s) {
+        if (!s || s.length !== 10) return null;
+        return s.substring(8,10) + '/' + s.substring(5,7) + '/' + s.substring(0,4);
+    }
+    function ddmmyyyyToYyyymmdd(s) {
+        if (!s || s.length !== 10) return null;
+        return s.substring(6,10) + '-' + s.substring(3,5) + '-' + s.substring(0,2);
+    }
+
+    function formatoHora12(h, m) {
+        const hh = parseInt(h, 10);
+        const mm = (m === undefined || m === null) ? null : parseInt(m, 10);
+        let h12 = hh % 12;
+        if (h12 === 0) h12 = 12;
+        const sufijo = hh < 12 ? 'AM' : 'PM';
+        if (mm === null) return h12 + sufijo;
+        const mmStr = (mm < 10 ? '0' : '') + mm;
+        return h12 + ':' + mmStr + ' ' + sufijo;
+    }
+
+    function cargarTimelineUsuario() {
+        if (usuarioRol === 'Admin') return;
+        const inputFecha = document.getElementById('timeline-fecha');
+        if (inputFecha && !inputFecha.value) inputFecha.value = hoyYYYYMMDD();
+        if (inputFecha) {
+            const hoy = new Date(); hoy.setDate(hoy.getDate() - 31);
+            inputFecha.min = hoy.getFullYear() + '-' + String(hoy.getMonth()+1).padStart(2,'0') + '-' + String(hoy.getDate()).padStart(2,'0');
+            inputFecha.max = hoyYYYYMMDD();
+        }
+        const fecha = FECHA_USUARIO_SEL ? yyyymmddToDdmmyyyy(FECHA_USUARIO_SEL) : null;
+        google.script.run.withSuccessHandler(function(res) {
+            if (!res || !res.exito) return;
+            const bloque = document.getElementById('bloque-timeline-usuario');
+            if (bloque) bloque.classList.remove('hidden');
+            renderTimelineUsuario(res);
+        }).obtenerTimelineUsuario(usuarioLogueado, fecha);
+    }
+
+    function cambiarFechaTimelineUsuario() {
+        const inp = document.getElementById('timeline-fecha');
+        const val = inp.value;
+        const hoyS = hoyYYYYMMDD();
+        FECHA_USUARIO_SEL = (val && val !== hoyS) ? val : null;
+        document.getElementById('btn-timeline-hoy').classList.toggle('hidden', !FECHA_USUARIO_SEL);
+        cargarCockpit();
+        cargarTimelineUsuario();
+    }
+
+    function resetFechaTimelineUsuario() {
+        FECHA_USUARIO_SEL = null;
+        document.getElementById('timeline-fecha').value = hoyYYYYMMDD();
+        document.getElementById('btn-timeline-hoy').classList.add('hidden');
+        cargarCockpit();
+        cargarTimelineUsuario();
+    }
+
+    function renderTimelineUsuario(data) {
+        const esHoy = data.esHoy !== false;
+        document.getElementById('timeline-titulo').innerText = esHoy ? 'Mi Día' : 'Día ' + (data.fecha || '');
+        document.getElementById('cockpit-label').innerText = esHoy ? 'Mi Meta Hoy' : 'Meta del ' + (data.fecha || '').substring(0, 5);
+
+        document.getElementById('timeline-resumen').innerText = (data.visitas.length || 0) + ' interacciones · ' + (data.total || 0) + '/' + metaDiariaUsuario + ' clientes';
+
+        const ultEl = document.getElementById('timeline-ultima');
+        if (!esHoy) {
+            ultEl.innerText = '';
+        } else {
+            const ult = data.ultimaInteraccionMin;
+            ultEl.innerText = ult === null
+                ? '— sin interacciones aún hoy'
+                : (ult < 60 ? '⏱ Última: hace ' + ult + ' min' : '⏱ Última: hace ' + Math.floor(ult/60) + 'h ' + (ult%60) + 'm');
+        }
+
+        renderTimelineCanvas('timeline-canvas', data.visitas);
+
+        const f = data.porFranja || { manana: 0, mediodia: 0, tarde: 0, ultimaHora: 0 };
+        const ultimaHoraHtml = esHoy
+            ? '<div class="bg-emerald-50 rounded-xl p-2"><p class="text-[8px] font-black text-emerald-500 uppercase tracking-widest">Última hora</p><p class="text-lg font-black text-emerald-700">' + f.ultimaHora + '</p></div>'
+            : '<div class="bg-slate-50 rounded-xl p-2"><p class="text-[8px] font-black text-slate-400 uppercase tracking-widest">Mediodía 12-2PM</p><p class="text-lg font-black text-slate-700">' + (f.mediodia || 0) + '</p></div>';
+
+        document.getElementById('timeline-franjas').innerHTML =
+            '<div class="bg-blue-50 rounded-xl p-2"><p class="text-[8px] font-black text-blue-400 uppercase tracking-widest">Mañana 8AM-12PM</p><p class="text-lg font-black text-blue-700">' + f.manana + '</p></div>' +
+            '<div class="bg-amber-50 rounded-xl p-2"><p class="text-[8px] font-black text-amber-500 uppercase tracking-widest">Tarde 2PM-6PM</p><p class="text-lg font-black text-amber-700">' + f.tarde + '</p></div>' +
+            ultimaHoraHtml;
+    }
+
+    function renderTimelineCanvas(elementoId, visitas) {
+        const cont = document.getElementById(elementoId);
+        if (!cont) return;
+        const ini = TIMELINE_HORA_INI;
+        const fin = TIMELINE_HORA_FIN;
+        const rango = (fin - ini) * 60;
+
+        let etiquetas = '';
+        for (let h = ini; h <= fin; h++) {
+            let pct = ((h - ini) * 60) / rango * 100;
+            etiquetas += '<span class="absolute bottom-0.5 text-[8px] font-bold text-slate-400 pointer-events-none whitespace-nowrap" style="left:' + pct + '%; transform: translateX(-50%);">' + formatoHora12(h) + '</span>';
+            etiquetas += '<span class="absolute top-0 bottom-4 w-px bg-slate-200 pointer-events-none" style="left:' + pct + '%;"></span>';
+        }
+
+        const arr = (visitas || []).filter(function(v) {
+            const hora = v.hora || v;
+            if (!hora || hora.length < 5) return false;
+            let h = parseInt(hora.substring(0, 2), 10);
+            let m = parseInt(hora.substring(3, 5), 10);
+            let min = (h - ini) * 60 + m;
+            return min >= 0 && min <= rango;
+        }).map(function(v) {
+            const hora = v.hora || v;
+            let h = parseInt(hora.substring(0, 2), 10);
+            let m = parseInt(hora.substring(3, 5), 10);
+            return { hora: hora, tipo: v.tipo || '', minutos: (h - ini) * 60 + m };
+        }).sort(function(a, b) { return a.minutos - b.minutos; });
+
+        const VENTANA_MIN = 14;
+        const niveles = [];
+        arr.forEach(function(v) {
+            let nivel = 0;
+            while (nivel < niveles.length && (v.minutos - niveles[nivel]) <= VENTANA_MIN) {
+                nivel++;
+            }
+            v.nivel = nivel;
+            niveles[nivel] = v.minutos;
+        });
+
+        let puntos = '';
+        arr.forEach(function(v, idx) {
+            let pct = (v.minutos / rango) * 100;
+            let color = '#3b82f6';
+            const tipo = v.tipo || '';
+            if (tipo.indexOf('Visita') >= 0) color = '#f43f5e';
+            else if (tipo.indexOf('Llamada') >= 0) color = '#3b82f6';
+            else if (tipo.indexOf('WhatsApp') >= 0) color = '#10b981';
+            else if (tipo.indexOf('Sala') >= 0) color = '#8b5cf6';
+            else if (tipo.indexOf('No se obtuvo') >= 0) color = '#94a3b8';
+            const bottom = 16 + (v.nivel * 4);
+            const labelTipo = tipo ? ' · ' + tipo : '';
+            const horaTip = formatoHora12(v.hora.substring(0, 2), v.hora.substring(3, 5));
+            puntos += '<span class="tl-dot" data-tip="' + horaTip + labelTipo + '" style="left:' + pct + '%; bottom:' + bottom + 'px; background:' + color + ';"></span>';
+        });
+
+        cont.innerHTML = etiquetas + puntos + '<div class="tl-tooltip"></div>';
+        attachTimelineHover(cont);
+    }
+
+    function attachTimelineHover(cont) {
+        const tooltip = cont.querySelector('.tl-tooltip');
+        if (!tooltip) return;
+        cont.querySelectorAll('.tl-dot').forEach(function(dot) {
+            const showTip = function() {
+                const txt = dot.getAttribute('data-tip') || '';
+                tooltip.textContent = txt;
+                tooltip.style.left = dot.style.left;
+                const dotBottom = parseFloat(dot.style.bottom) || 8;
+                tooltip.style.bottom = (dotBottom + 18) + 'px';
+                tooltip.style.opacity = '1';
+            };
+            const hideTip = function() { tooltip.style.opacity = '0'; };
+            dot.addEventListener('mouseenter', showTip);
+            dot.addEventListener('mouseleave', hideTip);
+            dot.addEventListener('click', showTip);
+        });
+    }
+
+    function cargarCockpitsEquipo() {
+        if (usuarioRol !== 'Admin') return;
+        const cont = document.getElementById('grid-cockpits-equipo');
+        if (!cont) return;
+        cont.innerHTML = '<p class="text-xs text-slate-400 col-span-full text-center py-4 animate-pulse">Actualizando equipo...</p>';
+
+        const fechaAdmin = FECHA_ADMIN_SEL ? yyyymmddToDdmmyyyy(FECHA_ADMIN_SEL) : null;
+        google.script.run.withSuccessHandler(function(res) {
+            if (!res || !res.exito) {
+                cont.innerHTML = '<p class="text-xs text-rose-500 col-span-full text-center py-4 font-bold">Error al cargar cockpits del equipo.</p>';
+                return;
+            }
+            renderCockpitsEquipo(res.asesores || []);
+            poblarSelectorVendedoresPDF(res.asesores || []);
+        }).obtenerCockpitsEquipo(fechaAdmin);
+    }
+
+    function cambiarFechaAdmin() {
+        const inp = document.getElementById('fecha-admin-input');
+        sincronizarSelectoresFechaAdmin(inp.value);
+    }
+
+    function cambiarFechaDesdeTimelines() {
+        const inp = document.getElementById('fecha-timelines-input');
+        sincronizarSelectoresFechaAdmin(inp.value);
+    }
+
+    function sincronizarSelectoresFechaAdmin(val) {
+        const hoyS = hoyYYYYMMDD();
+        FECHA_ADMIN_SEL = (val && val !== hoyS) ? val : null;
+        const titulo = FECHA_ADMIN_SEL ? yyyymmddToDdmmyyyy(FECHA_ADMIN_SEL) : 'Hoy';
+
+        const inpGlobal = document.getElementById('fecha-admin-input');
+        const inpLocal = document.getElementById('fecha-timelines-input');
+        if (inpGlobal) inpGlobal.value = val || hoyS;
+        if (inpLocal) inpLocal.value = val || hoyS;
+
+        document.getElementById('fecha-admin-titulo').innerText = titulo;
+        document.getElementById('btn-fecha-admin-hoy').classList.toggle('hidden', !FECHA_ADMIN_SEL);
+        const btnLocal = document.getElementById('btn-fecha-timelines-hoy');
+        if (btnLocal) btnLocal.classList.toggle('hidden', !FECHA_ADMIN_SEL);
+
+        cargarCockpit();
+        cargarCockpitsEquipo();
+        cargarTimelinesEquipo();
+    }
+
+    function resetFechaAdmin() {
+        sincronizarSelectoresFechaAdmin(hoyYYYYMMDD());
+    }
+
+    function inicializarFechaAdmin() {
+        const hoyS = hoyYYYYMMDD();
+        const hoy = new Date(); hoy.setDate(hoy.getDate() - 31);
+        const minS = hoy.getFullYear() + '-' + String(hoy.getMonth()+1).padStart(2,'0') + '-' + String(hoy.getDate()).padStart(2,'0');
+        ['fecha-admin-input', 'fecha-timelines-input'].forEach(function(id) {
+            const inp = document.getElementById(id);
+            if (!inp) return;
+            inp.value = hoyS;
+            inp.min = minS;
+            inp.max = hoyS;
+        });
+    }
+
+    let VISTA_ADMIN_ACTUAL = 'timeline';
+    let TIMELINES_EQUIPO_CACHE = [];
+
+    function switchVistaAdmin(vista) {
+        VISTA_ADMIN_ACTUAL = vista;
+        const btnT = document.getElementById('btn-vista-timeline');
+        const btnH = document.getElementById('btn-vista-heatmap');
+        const vT = document.getElementById('vista-timeline-equipo');
+        const vH = document.getElementById('vista-heatmap-equipo');
+
+        if (vista === 'heatmap') {
+            btnH.className = 'bg-blue-600 text-white px-4 py-2 rounded-full font-black text-[10px] uppercase tracking-widest shadow-md transition-all';
+            btnT.className = 'bg-slate-100 text-slate-600 hover:bg-slate-200 px-4 py-2 rounded-full font-black text-[10px] uppercase tracking-widest transition-all';
+            vT.classList.add('hidden');
+            vH.classList.remove('hidden');
+            renderHeatmapEquipo(TIMELINES_EQUIPO_CACHE);
+        } else {
+            btnT.className = 'bg-blue-600 text-white px-4 py-2 rounded-full font-black text-[10px] uppercase tracking-widest shadow-md transition-all';
+            btnH.className = 'bg-slate-100 text-slate-600 hover:bg-slate-200 px-4 py-2 rounded-full font-black text-[10px] uppercase tracking-widest transition-all';
+            vH.classList.add('hidden');
+            vT.classList.remove('hidden');
+            renderTimelinesEquipo(TIMELINES_EQUIPO_CACHE);
+        }
+    }
+
+    function cargarTimelinesEquipo() {
+        if (usuarioRol !== 'Admin') return;
+        const vT = document.getElementById('vista-timeline-equipo');
+        vT.innerHTML = '<p class="text-xs text-slate-400 text-center py-4 animate-pulse">Cargando actividad del equipo...</p>';
+
+        const fechaAdmin = FECHA_ADMIN_SEL ? yyyymmddToDdmmyyyy(FECHA_ADMIN_SEL) : null;
+        google.script.run.withSuccessHandler(function(res) {
+            if (!res || !res.exito) {
+                vT.innerHTML = '<p class="text-xs text-rose-500 text-center py-4 font-bold">Error: ' + ((res && res.mensaje) || 'sin detalle') + '</p>';
+                return;
+            }
+            TIMELINES_EQUIPO_CACHE = res.asesores || [];
+            if (VISTA_ADMIN_ACTUAL === 'heatmap') renderHeatmapEquipo(TIMELINES_EQUIPO_CACHE);
+            else renderTimelinesEquipo(TIMELINES_EQUIPO_CACHE);
+        }).obtenerTimelinesEquipo(fechaAdmin);
+    }
+
+    function renderTimelinesEquipo(asesores) {
+        const cont = document.getElementById('vista-timeline-equipo');
+        if (asesores.length === 0) {
+            cont.innerHTML = '<p class="text-xs text-slate-400 text-center py-4 font-bold">No hay asesores activos.</p>';
+            return;
+        }
+
+        cont.innerHTML = asesores.map(function(a, idx) {
+            const safe = String(a.alias).split('<').join('&lt;').split('>').join('&gt;');
+            const pct = Math.min(100, Math.round((a.total / Math.max(1, a.meta)) * 100));
+            let color = 'text-rose-600';
+            if (pct >= 100) color = 'text-emerald-700';
+            else if (pct >= 75) color = 'text-amber-700';
+
+            return '<div class="bg-slate-50 p-4 rounded-2xl border border-slate-100">' +
+                '<div class="flex items-center justify-between mb-2 flex-wrap gap-2">' +
+                    '<p class="text-xs font-black text-slate-800">' + safe + '</p>' +
+                    '<p class="text-[11px] font-black ' + color + '">' + a.total + '/' + a.meta + ' (' + pct + '%)</p>' +
+                '</div>' +
+                '<div id="tl-canvas-' + idx + '" class="relative bg-white rounded-xl h-28 overflow-hidden border border-slate-100"></div>' +
+            '</div>';
+        }).join('');
+
+        asesores.forEach(function(a, idx) {
+            const visitasObj = (a.visitas || []).map(function(h) { return { hora: h, tipo: '' }; });
+            renderTimelineCanvas('tl-canvas-' + idx, visitasObj);
+        });
+    }
+
+    function renderHeatmapEquipo(asesores) {
+        const cont = document.getElementById('vista-heatmap-equipo');
+        if (asesores.length === 0) {
+            cont.innerHTML = '<p class="text-xs text-slate-400 text-center py-4 font-bold">No hay asesores activos.</p>';
+            return;
+        }
+
+        const ini = TIMELINE_HORA_INI;
+        const fin = TIMELINE_HORA_FIN;
+        const horas = [];
+        for (let h = ini; h <= fin; h++) horas.push(h);
+
+        let html = '<table class="w-full border-collapse text-[10px]">' +
+            '<thead><tr><th class="text-left p-2 sticky left-0 bg-white">Asesor</th>';
+        horas.forEach(function(h) {
+            html += '<th class="p-1 text-center font-black text-slate-400">' + formatoHora12(h) + '</th>';
+        });
+        html += '<th class="p-2 text-center font-black text-slate-600">Total</th></tr></thead><tbody>';
+
+        asesores.forEach(function(a) {
+            const safe = String(a.alias).split('<').join('&lt;').split('>').join('&gt;');
+            const conteoPorHora = {};
+            (a.visitas || []).forEach(function(hora) {
+                let h = parseInt(String(hora).substring(0, 2), 10);
+                conteoPorHora[h] = (conteoPorHora[h] || 0) + 1;
+            });
+
+            const pct = Math.min(100, Math.round((a.total / Math.max(1, a.meta)) * 100));
+            let colTotal = 'text-rose-600';
+            if (pct >= 100) colTotal = 'text-emerald-700';
+            else if (pct >= 75) colTotal = 'text-amber-700';
+
+            html += '<tr class="border-t border-slate-100">' +
+                '<td class="p-2 font-black text-slate-700 sticky left-0 bg-white">' + safe + '</td>';
+            horas.forEach(function(h) {
+                const n = conteoPorHora[h] || 0;
+                let bg = '#f8fafc', txt = '#cbd5e1', peso = 'font-normal';
+                if (n >= 6) { bg = '#1d4ed8'; txt = 'white'; peso = 'font-black'; }
+                else if (n >= 3) { bg = '#60a5fa'; txt = 'white'; peso = 'font-bold'; }
+                else if (n >= 1) { bg = '#dbeafe'; txt = '#1e40af'; peso = 'font-bold'; }
+                html += '<td class="p-1 text-center"><div style="background:' + bg + '; color:' + txt + ';" class="rounded ' + peso + ' py-1">' + (n || '·') + '</div></td>';
+            });
+            html += '<td class="p-2 text-center font-black ' + colTotal + '">' + a.total + '/' + a.meta + '</td>';
+            html += '</tr>';
+        });
+        html += '</tbody></table>' +
+            '<div class="mt-4 flex items-center gap-3 flex-wrap text-[10px] font-bold text-slate-500">' +
+                '<span>Intensidad:</span>' +
+                '<span class="px-2 py-1 rounded" style="background:#f8fafc;color:#cbd5e1;">· (0)</span>' +
+                '<span class="px-2 py-1 rounded" style="background:#dbeafe;color:#1e40af;">1-2</span>' +
+                '<span class="px-2 py-1 rounded font-bold" style="background:#60a5fa;color:white;">3-5</span>' +
+                '<span class="px-2 py-1 rounded font-black" style="background:#1d4ed8;color:white;">6+</span>' +
+            '</div>';
+
+        cont.innerHTML = html;
+    }
+
+    function poblarSelectorVendedoresPDF(asesores) {
+        ['pdf-vendedor', 'pdf-rango-vendedor'].forEach(function(id) {
+            const sel = document.getElementById(id);
+            if (!sel) return;
+            const actual = sel.value;
+            sel.innerHTML = '<option value="">🌍 Todos los asesores</option>';
+            asesores.slice().sort(function(a,b){ return a.alias.localeCompare(b.alias); }).forEach(function(a) {
+                const op = document.createElement('option');
+                op.value = a.email;
+                op.text = a.alias;
+                sel.appendChild(op);
+            });
+            if (actual) sel.value = actual;
+        });
+    }
+
+    function switchModoPDF(modo) {
+        const btnMes = document.getElementById('btn-modo-pdf-mes');
+        const btnRango = document.getElementById('btn-modo-pdf-rango');
+        const blMes = document.getElementById('pdf-modo-mes');
+        const blRango = document.getElementById('pdf-modo-rango');
+        document.getElementById('pdf-resultado').classList.add('hidden');
+
+        if (modo === 'rango') {
+            btnRango.className = 'bg-blue-600 text-white px-4 py-2 rounded-full font-black text-[10px] uppercase tracking-widest shadow-md transition-all';
+            btnMes.className = 'bg-slate-100 text-slate-600 hover:bg-slate-200 px-4 py-2 rounded-full font-black text-[10px] uppercase tracking-widest transition-all';
+            blMes.classList.add('hidden');
+            blRango.classList.remove('hidden');
+            const desde = document.getElementById('pdf-rango-desde');
+            const hasta = document.getElementById('pdf-rango-hasta');
+            if (!desde.value) {
+                const d = new Date(); d.setDate(d.getDate() - 30);
+                desde.value = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+            }
+            if (!hasta.value) hasta.value = hoyYYYYMMDD();
+        } else {
+            btnMes.className = 'bg-blue-600 text-white px-4 py-2 rounded-full font-black text-[10px] uppercase tracking-widest shadow-md transition-all';
+            btnRango.className = 'bg-slate-100 text-slate-600 hover:bg-slate-200 px-4 py-2 rounded-full font-black text-[10px] uppercase tracking-widest transition-all';
+            blRango.classList.add('hidden');
+            blMes.classList.remove('hidden');
+        }
+    }
+
+    function generarInformeRangoPDF() {
+        const btn = document.getElementById('btn-generar-pdf-rango');
+        const desde = document.getElementById('pdf-rango-desde').value;
+        const hasta = document.getElementById('pdf-rango-hasta').value;
+        const vendedor = document.getElementById('pdf-rango-vendedor').value;
+        const resultado = document.getElementById('pdf-resultado');
+
+        if (!desde || !hasta) { alert('Seleccioná fechas Desde y Hasta.'); return; }
+        if (desde > hasta) { alert('La fecha Desde es posterior a Hasta.'); return; }
+
+        btn.disabled = true;
+        btn.innerText = '⏳ GENERANDO...';
+        iniciarProgresoPDF(resultado);
+
+        google.script.run.withSuccessHandler(function(res) {
+            btn.disabled = false;
+            btn.innerText = '📄 Generar Informe';
+            mostrarResultadoPDF(resultado, res);
+        }).withFailureHandler(function(err) {
+            detenerProgresoPDF();
+            btn.disabled = false;
+            btn.innerText = '📄 Generar Informe';
+            resultado.innerHTML = '<div class="bg-rose-50 border border-rose-200 text-rose-700 p-4 rounded-2xl text-xs font-bold text-center">❌ Error: ' + err.message + '</div>';
+        }).generarInformeRangoPDF(desde, hasta, vendedor || null);
+    }
+
+    function poblarSelectorMesesPDF() {
+        const sel = document.getElementById('pdf-mes');
+        if (!sel || sel.options.length > 0) return;
+        const mesesEs = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+        const hoy = new Date();
+        for (let i = 0; i < 12; i++) {
+            const d = new Date(hoy.getFullYear(), hoy.getMonth() - i, 1);
+            const yyyy = d.getFullYear();
+            const mm = String(d.getMonth() + 1).padStart(2, '0');
+            const op = document.createElement('option');
+            op.value = yyyy + '-' + mm;
+            op.text = mesesEs[d.getMonth()] + ' ' + yyyy;
+            sel.appendChild(op);
+        }
+    }
+
+    let PDF_PROGRESO_INTERVAL = null;
+
+    function iniciarProgresoPDF(resultadoEl) {
+        resultadoEl.classList.remove('hidden');
+        const pasos = [
+            'Conectando con Google Drive...',
+            'Leyendo planilla de visitas...',
+            'Agrupando interacciones por vendedor...',
+            'Calculando totales por tipo...',
+            'Construyendo el HTML del informe...',
+            'Convirtiendo a PDF...',
+            'Guardando en Drive...',
+            'Generando enlace público...'
+        ];
+        resultadoEl.innerHTML =
+            '<div class="bg-blue-50 border border-blue-100 p-4 rounded-2xl">' +
+                '<div class="flex items-center justify-between mb-2">' +
+                    '<p id="pdf-paso" class="text-[11px] font-black text-blue-700 uppercase tracking-widest">' + pasos[0] + '</p>' +
+                    '<p id="pdf-pct" class="text-[11px] font-black text-blue-700">0%</p>' +
+                '</div>' +
+                '<div class="w-full bg-blue-100 rounded-full h-2.5 overflow-hidden">' +
+                    '<div id="pdf-barra" class="bg-blue-600 h-2.5 rounded-full transition-all duration-700 ease-out" style="width:0%"></div>' +
+                '</div>' +
+            '</div>';
+
+        let pct = 0;
+        let pasoIdx = 0;
+        if (PDF_PROGRESO_INTERVAL) clearInterval(PDF_PROGRESO_INTERVAL);
+        PDF_PROGRESO_INTERVAL = setInterval(function() {
+            const incremento = pct < 30 ? 5 : pct < 60 ? 3 : pct < 80 ? 2 : pct < 92 ? 1 : 0.3;
+            pct = Math.min(94, pct + incremento);
+            const barra = document.getElementById('pdf-barra');
+            const pctEl = document.getElementById('pdf-pct');
+            const pasoEl = document.getElementById('pdf-paso');
+            if (barra) barra.style.width = pct + '%';
+            if (pctEl) pctEl.innerText = Math.floor(pct) + '%';
+            const nuevoPaso = Math.min(pasos.length - 1, Math.floor(pct / (100 / pasos.length)));
+            if (nuevoPaso !== pasoIdx && pasoEl) {
+                pasoIdx = nuevoPaso;
+                pasoEl.innerText = pasos[pasoIdx];
+            }
+        }, 350);
+    }
+
+    function detenerProgresoPDF() {
+        if (PDF_PROGRESO_INTERVAL) { clearInterval(PDF_PROGRESO_INTERVAL); PDF_PROGRESO_INTERVAL = null; }
+    }
+
+    function mostrarResultadoPDF(resultadoEl, res) {
+        detenerProgresoPDF();
+        const barra = document.getElementById('pdf-barra');
+        const pctEl = document.getElementById('pdf-pct');
+        if (barra) barra.style.width = '100%';
+        if (pctEl) pctEl.innerText = '100%';
+
+        setTimeout(function() {
+            if (!res || !res.exito) {
+                resultadoEl.innerHTML = '<div class="bg-rose-50 border border-rose-200 text-rose-700 p-4 rounded-2xl text-xs font-bold text-center">❌ ' + (res && res.mensaje ? res.mensaje : 'Error al generar el informe.') + '</div>';
+                return;
+            }
+            resultadoEl.innerHTML = '<div class="bg-emerald-50 border border-emerald-200 p-4 rounded-2xl text-center">' +
+                '<p class="text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-2">✅ Informe Listo</p>' +
+                '<p class="text-xs font-bold text-slate-700 mb-3">' + res.totalInteracciones + ' interacciones procesadas</p>' +
+                '<a href="' + res.url + '" target="_blank" class="inline-block bg-emerald-600 hover:bg-emerald-700 text-white px-6 py-3 rounded-full font-black text-[11px] uppercase tracking-widest shadow-md transition-all active:scale-95">📥 Abrir PDF</a>' +
+            '</div>';
+        }, 400);
+    }
+
+    function generarInformePDF() {
+        const btn = document.getElementById('btn-generar-pdf');
+        const mes = document.getElementById('pdf-mes').value;
+        const vendedor = document.getElementById('pdf-vendedor').value;
+        const resultado = document.getElementById('pdf-resultado');
+
+        if (!mes) { alert('Seleccioná un mes.'); return; }
+
+        btn.disabled = true;
+        btn.innerText = '⏳ GENERANDO...';
+        iniciarProgresoPDF(resultado);
+
+        google.script.run.withSuccessHandler(function(res) {
+            btn.disabled = false;
+            btn.innerText = '📄 Generar Informe';
+            mostrarResultadoPDF(resultado, res);
+        }).withFailureHandler(function(err) {
+            detenerProgresoPDF();
+            btn.disabled = false;
+            btn.innerText = '📄 Generar Informe';
+            resultado.innerHTML = '<div class="bg-rose-50 border border-rose-200 text-rose-700 p-4 rounded-2xl text-xs font-bold text-center">❌ Error: ' + err.message + '</div>';
+        }).generarInformeMensualPDF(mes, vendedor || null);
+    }
+
+    function renderCockpitsEquipo(asesores) {
+        const cont = document.getElementById('grid-cockpits-equipo');
+        if (asesores.length === 0) {
+            cont.innerHTML = '<p class="text-xs text-slate-400 col-span-full text-center py-4 font-bold">No hay asesores activos.</p>';
+            return;
+        }
+
+        cont.innerHTML = asesores.map(function(a) {
+            const meta = Math.max(1, a.meta || 1);
+            const atendidos = Math.max(0, a.atendidos || 0);
+            const pct = Math.min(100, Math.round((atendidos / meta) * 100));
+            let color = '#f43f5e', bg = 'bg-rose-50', textCol = 'text-rose-600';
+            if (pct >= 100) { color = '#10b981'; bg = 'bg-emerald-50'; textCol = 'text-emerald-700'; }
+            else if (pct >= 50) { color = '#f59e0b'; bg = 'bg-amber-50'; textCol = 'text-amber-700'; }
+            let aliasSafe = String(a.alias).split('<').join('&lt;').split('>').join('&gt;');
+
+            return '<div class="' + bg + ' p-3 rounded-2xl border border-slate-100 text-center">' +
+                '<p class="text-[10px] font-black text-slate-700 truncate mb-2" title="' + aliasSafe + '">' + aliasSafe + '</p>' +
+                '<div class="relative w-16 h-16 mx-auto">' +
+                    '<svg class="w-full h-full -rotate-90" viewBox="0 0 36 36">' +
+                        '<circle cx="18" cy="18" r="15.915" fill="none" stroke="rgba(0,0,0,0.08)" stroke-width="3"/>' +
+                        '<circle cx="18" cy="18" r="15.915" fill="none" stroke="' + color + '" stroke-width="3" stroke-dasharray="' + pct + ' 100" stroke-linecap="round"/>' +
+                    '</svg>' +
+                    '<div class="absolute inset-0 flex flex-col items-center justify-center">' +
+                        '<p class="text-[10px] font-black ' + textCol + ' leading-none">' + atendidos + '/' + meta + '</p>' +
+                        '<p class="text-[8px] font-bold text-slate-500 leading-none mt-0.5">' + pct + '%</p>' +
+                    '</div>' +
+                '</div>' +
+            '</div>';
+        }).join('');
+    }
+
+    function mostrarTipCarga(indice) {
+        let inner = document.getElementById('tip-carga-inner');
+        let texto = document.getElementById('tip-carga-texto');
+        inner.style.opacity = '0';
+        setTimeout(function() {
+            texto.innerText = TIPS_CARGA[indice % TIPS_CARGA.length];
+            inner.style.opacity = '1';
+        }, 700);
+    }
+
+    function iniciarAnimacionProgreso() {
+        document.getElementById('texto-carga').innerText = "Calculando Inteligencia Comercial...";
+        document.getElementById('contenedor-progreso-carga').classList.remove('hidden');
+        document.getElementById('contenedor-progreso-carga').classList.add('flex');
+        document.getElementById('pantalla-carga').classList.remove('opacity-0');
+        document.getElementById('pantalla-carga').style.display = 'flex';
+
+        let barra = document.getElementById('barra-carga-inteligencia');
+        let texto = document.getElementById('texto-pasos-carga');
+        barra.style.width = '0%';
+
+        let pasos = [
+            "Leyendo matriz de clientes...",
+            "Analizando histórico de ventas...",
+            "Calculando Ley de Pareto (80/20) por vendedor...",
+            "Escaneando Fugas de Capital en tiempo real..."
+        ];
+
+        let progreso = 0;
+        let paso = 0;
+
+        intervaloProgreso = setInterval(function() {
+            progreso += Math.random() * 4;
+            if(progreso >= 95) progreso = 95;
+            barra.style.width = progreso + '%';
+
+            if(progreso > 20 && paso === 0) { texto.innerText = pasos[1]; paso++; }
+            if(progreso > 50 && paso === 1) { texto.innerText = pasos[2]; paso++; }
+            if(progreso > 80 && paso === 2) { texto.innerText = pasos[3]; paso++; }
+        }, 1000);
+
+        // Tips rotativos — aparecen a los 2 seg y cambian cada 4 seg
+        let tipIndice = Math.floor(Math.random() * TIPS_CARGA.length);
+        let tipContenedor = document.getElementById('tip-carga');
+        tipContenedor.classList.remove('hidden');
+        setTimeout(function() {
+            mostrarTipCarga(tipIndice);
+            intervaloTips = setInterval(function() {
+                let siguiente;
+                do { siguiente = Math.floor(Math.random() * TIPS_CARGA.length); } while (siguiente === tipIndice && TIPS_CARGA.length > 1);
+                tipIndice = siguiente;
+                mostrarTipCarga(tipIndice);
+            }, 6000);
+        }, 2000);
+    }
+
+    function detenerAnimacionProgreso() {
+        clearInterval(intervaloProgreso);
+        clearInterval(intervaloTips);
+        document.getElementById('tip-carga').classList.add('hidden');
+        document.getElementById('tip-carga-inner').style.opacity = '0';
+        document.getElementById('barra-carga-inteligencia').style.width = '100%';
+        document.getElementById('texto-pasos-carga').innerText = "¡Completado! Construyendo panel...";
+
+        setTimeout(function() {
+            document.getElementById('pantalla-carga').classList.add('opacity-0');
+            setTimeout(function() {
+                document.getElementById('pantalla-carga').style.display = 'none';
+                document.getElementById('contenedor-progreso-carga').classList.add('hidden');
+            }, 500);
+        }, 500);
+    }
+
+    function loadC() {
+        iniciarAnimacionProgreso();
+        google.script.run
+        .withSuccessHandler(res => { 
+            // EL ESCUDO: Si el backend falla, pintamos la pantalla de rojo y mostramos el error.
+            if(!res || res.exito === false) {
+                clearInterval(intervaloProgreso);
+                document.getElementById('texto-carga').innerHTML = "⚠️ ERROR AL CARGAR<br><span class='text-xs font-normal mt-2 block text-rose-200'>" + (res ? res.mensaje : "Error desconocido") + "</span>";
+                document.getElementById('pantalla-carga').classList.replace('from-blue-900', 'from-rose-900');
+                document.getElementById('pantalla-carga').classList.replace('via-blue-600', 'via-rose-700');
+                document.getElementById('pantalla-carga').classList.replace('to-purple-900', 'to-rose-900');
+                document.getElementById('barra-carga-inteligencia').parentElement.style.display = 'none';
+                return;
+            }
+
+            DATA = res.clientes; 
+
+            let unicos = [...new Set(DATA.map(c => c.vend))].sort();
+            let selectVend = document.getElementById('rep-vendedor');
+            selectVend.innerHTML = '<option value="">🌍 Todos los asesores (Global)</option>';
+            let matchedVend = "";
+            unicos.forEach(v => {
+                if(v && v !== "SIN VENDEDOR ASIGNADO") {
+                    let op = document.createElement('option');
+                    op.value = v; op.text = v;
+                    selectVend.appendChild(op);
+                    if(v.toLowerCase().includes(usuarioAlias.toLowerCase())) {
+                        matchedVend = v;
+                    }
+                }
+            });
+            if (usuarioRol !== 'Admin' && matchedVend) {
+                selectVend.value = matchedVend;
+                selectVend.disabled = true;
+                selectVend.classList.add('opacity-70', 'cursor-not-allowed');
+            }
+
+            detenerAnimacionProgreso();
+            switchTab('tareas'); // Llevar a las tareas por defecto
+
+        })
+        .withFailureHandler(err => {
+            clearInterval(intervaloProgreso);
+            document.getElementById('texto-carga').innerHTML = "⚠️ ERROR DE RED<br><span class='text-xs font-normal mt-2 block text-rose-200'>" + err.message + "</span>";
+            document.getElementById('pantalla-carga').classList.replace('from-blue-900', 'from-rose-900');
+            document.getElementById('pantalla-carga').classList.replace('via-blue-600', 'via-rose-700');
+            document.getElementById('pantalla-carga').classList.replace('to-purple-900', 'to-rose-900');
+            document.getElementById('barra-carga-inteligencia').parentElement.style.display = 'none';
+        })
+        .obtenerMisClientes();
+    }
+
+    function renderChips() {
+        let vCounts = {}, dCounts = {}, mCounts = {};
+        
+        DATA.forEach(c => {
+            let matchV = filtrosActivos.vend ? c.vend === filtrosActivos.vend : true;
+            let matchD = filtrosActivos.dep ? c.dep === filtrosActivos.dep : true;
+            let matchM = filtrosActivos.mun ? c.mun === filtrosActivos.mun : true;
+
+            if (matchD && matchM && c.vend) vCounts[c.vend] = (vCounts[c.vend] || 0) + 1;
+            if (matchV && matchM && c.dep) dCounts[c.dep] = (dCounts[c.dep] || 0) + 1;
+            if (matchV && matchD && c.mun) mCounts[c.mun] = (mCounts[c.mun] || 0) + 1;
+        });
+
+        document.getElementById('chip-vendedores').innerHTML = Object.keys(vCounts).sort().map(v => {
+            let activo = filtrosActivos.vend === v;
+            return `<button onclick="toggleFiltro('vend', '${v}')" class="px-4 py-2 rounded-full text-[11px] font-bold border transition-colors ${activo ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 hover:bg-slate-50 border-slate-200'}">
+                ${v} <span class="${activo ? 'text-blue-200' : 'text-slate-400'} ml-1">(${vCounts[v]})</span>
+            </button>`;
+        }).join('');
+
+        dptosElSalvador.forEach(dep => {
+            let elem = document.getElementById('map-' + dep);
+            if (elem) {
+                if (filtrosActivos.dep === dep) elem.classList.add('active');
+                else elem.classList.remove('active');
+                
+                let countSpan = elem.querySelector('.count-span');
+                if(dCounts[dep] && dCounts[dep] > 0) {
+                    if(!countSpan) elem.innerHTML += `<span class="count-span block text-[9px] font-black text-slate-400 mt-1">${dCounts[dep]} Clientes</span>`;
+                    else countSpan.innerText = `${dCounts[dep]} Clientes`;
+                    elem.style.opacity = "1";
+                } else {
+                    if(countSpan) countSpan.remove();
+                    elem.style.opacity = "0.5";
+                }
+            }
+        });
+
+        const contMun = document.getElementById('contenedor-municipios');
+        if (filtrosActivos.dep || filtrosActivos.vend) {
+            contMun.classList.remove('hidden');
+            document.getElementById('chip-municipios').innerHTML = Object.keys(mCounts).sort().map(m => {
+                let activo = filtrosActivos.mun === m;
+                return `<button onclick="toggleFiltro('mun', '${m}')" class="px-4 py-2 rounded-full text-[11px] font-bold border transition-colors ${activo ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-slate-600 hover:bg-slate-50 border-slate-200'}">
+                    ${m} <span class="${activo ? 'text-purple-200' : 'text-slate-400'} ml-1">(${mCounts[m]})</span>
+                </button>`;
+            }).join('');
+        } else {
+            contMun.classList.add('hidden');
+        }
+
+        // Chips de Tipo Cliente
+        let tiposCounts = {};
+        DATA.forEach(c => {
+            if (c.tipoCli) tiposCounts[c.tipoCli] = (tiposCounts[c.tipoCli] || 0) + 1;
+        });
+        const contTipo = document.getElementById('contenedor-tipo-cli');
+        const tiposKeys = Object.keys(tiposCounts).sort();
+        if (tiposKeys.length > 0) {
+            contTipo.classList.remove('hidden');
+            document.getElementById('chip-tipo-cli').innerHTML = tiposKeys.map(function(t) {
+                let activo = filtrosActivos.tipoCli === t;
+                let clsBtn = activo ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 hover:bg-slate-50 border-slate-200';
+                let clsSpan = activo ? 'text-indigo-200' : 'text-slate-400';
+                let safeT = t.split("'").join("&#39;");
+                return '<button onclick="toggleFiltro(\'tipoCli\', \'' + safeT + '\')" class="px-4 py-2 rounded-full text-[11px] font-bold border transition-colors ' + clsBtn + '">' +
+                    t + ' <span class="' + clsSpan + ' ml-1">(' + tiposCounts[t] + ')</span></button>';
+            }).join('');
+        } else {
+            contTipo.classList.add('hidden');
+        }
+    }
+
+    function toggleFiltro(tipo, valor) {
+        if (filtrosActivos[tipo] === valor) filtrosActivos[tipo] = null; 
+        else {
+            filtrosActivos[tipo] = valor;
+            if (tipo === 'dep') filtrosActivos.mun = null; 
+        }
+        
+        PAGINA_ACTUAL = 20; 
+        
+        const lista = document.getElementById('lista');
+        lista.innerHTML = '<div class="col-span-1 md:col-span-2 text-center py-20 text-blue-500 font-black animate-pulse uppercase tracking-widest text-xs">Actualizando...</div>';
+        document.getElementById('contenedor-ver-mas').classList.add('hidden');
+
+        setTimeout(() => { aplicarFiltros(); }, 50); 
+    }
+
+    document.getElementById('busc').addEventListener('input', e => {
+        filtrosActivos.search = e.target.value.toLowerCase();
+        PAGINA_ACTUAL = 20;
+        
+        clearTimeout(inputTimeout);
+        document.getElementById('lista').innerHTML = '<div class="col-span-1 md:col-span-2 text-center py-20 text-blue-500 font-black animate-pulse uppercase tracking-widest text-xs">Buscando...</div>';
+        document.getElementById('contenedor-ver-mas').classList.add('hidden');
+        
+        inputTimeout = setTimeout(() => { aplicarFiltros(); }, 300); 
+    });
+
+    function actualizarIndicadorUI() {
+        const ind = document.getElementById('indicador-filtros');
+        let partes = [];
+        
+        if (modoTareas) partes.push("Mostrando tareas pendientes");
+        else partes.push("Mostrando clientes");
+
+        if (filtrosActivos.clase) {
+            if(filtrosActivos.clase === 'A') partes.push("de <span class='text-rose-600'>Clase VIP</span>");
+            if(filtrosActivos.clase === 'B') partes.push("de <span class='text-amber-600'>Clase Regular</span>");
+            if(filtrosActivos.clase === 'C') partes.push("de <span class='text-slate-500'>Clase Esporádicos</span>");
+        }
+
+        if (filtrosActivos.tipoCli) partes.push(`tipo <b>${filtrosActivos.tipoCli}</b>`);
+        if (filtrosActivos.vend) partes.push(`del asesor <b>${filtrosActivos.vend}</b>`);
+        if (filtrosActivos.dep) partes.push(`en <b>${filtrosActivos.dep}</b>`);
+        if (filtrosActivos.mun) partes.push(`(<b>${filtrosActivos.mun}</b>)`);
+        if (filtrosActivos.search) partes.push(`buscando "<b>${filtrosActivos.search}</b>"`);
+        
+        if (partes.length === 1 && !modoTareas) {
+            ind.innerHTML = "Viendo toda la base de datos (Usa los filtros para reducir la lista)";
+            ind.classList.remove('bg-blue-50', 'text-blue-700', 'border-blue-100');
+            ind.classList.add('bg-slate-100', 'text-slate-500', 'border-slate-200');
+        } else {
+            ind.innerHTML = partes.join(" ");
+            ind.classList.remove('bg-slate-100', 'text-slate-500', 'border-slate-200');
+            ind.classList.add('bg-blue-50', 'text-blue-800', 'border-blue-200');
+        }
+        
+        ind.classList.remove('hidden');
+    }
+
+    function toggleGestionados() {
+        filtrosActivos.soloGestionados = !filtrosActivos.soloGestionados;
+        const btn = document.getElementById('btn-solo-gestionados');
+        const icon = document.getElementById('icon-gestionados');
+        if (filtrosActivos.soloGestionados) {
+            btn.classList.add('bg-emerald-50', 'text-emerald-700', 'border-emerald-300');
+            btn.classList.remove('bg-white', 'text-slate-500', 'border-slate-200');
+            icon.innerText = "✅";
+        } else {
+            btn.classList.remove('bg-emerald-50', 'text-emerald-700', 'border-emerald-300');
+            btn.classList.add('bg-white', 'text-slate-500', 'border-slate-200');
+            icon.innerText = "⚪";
+        }
+        PAGINA_ACTUAL = 20;
+        
+        const lista = document.getElementById('lista');
+        lista.innerHTML = '<div class="col-span-1 md:col-span-2 text-center py-20 text-emerald-500 font-black animate-pulse uppercase tracking-widest text-xs">Actualizando...</div>';
+        
+        setTimeout(() => { aplicarFiltros(); }, 50); 
+    }
+
+    function aplicarFiltros() {
+        let hayFiltroActivo = filtrosActivos.search !== '' || filtrosActivos.vend !== null || filtrosActivos.dep !== null || filtrosActivos.mun !== null;
+
+        renderChips(); 
+
+        if (!hayFiltroActivo && !modoTareas) {
+            DATA_FILTRADA = [];
+            document.getElementById('lista').innerHTML = `
+                <div class="col-span-1 md:col-span-2 text-center py-20">
+                    <div class="text-6xl mb-4 opacity-50">🧭</div>
+                    <p class="text-slate-400 font-bold uppercase tracking-widest text-[11px] leading-relaxed">Selecciona un Asesor, una zona en el Mapa<br>o usa el buscador para mostrar la lista.</p>
+                </div>
+            `;
+            document.getElementById('contenedor-ver-mas').classList.add('hidden');
+            document.getElementById('contenedor-clasificacion').classList.add('hidden');
+            actualizarIndicadorUI();
+            return;
+        }
+
+        let datosBase = DATA.filter(c => {
+            let matchText = filtrosActivos.search === '' || c.nombre.toLowerCase().includes(filtrosActivos.search) || c.codigo.toLowerCase().includes(filtrosActivos.search) || c.vend.toLowerCase().includes(filtrosActivos.search);
+            let matchVend = !filtrosActivos.vend || c.vend === filtrosActivos.vend;
+            let matchDep = !filtrosActivos.dep || c.dep === filtrosActivos.dep;
+            let matchMun = !filtrosActivos.mun || c.mun === filtrosActivos.mun;
+            let matchGestionado = !filtrosActivos.soloGestionados || c.contactado === true;
+            let matchTipoCli = !filtrosActivos.tipoCli || c.tipoCli === filtrosActivos.tipoCli;
+
+            let matchTarea = true;
+
+            return matchText && matchVend && matchDep && matchMun && matchTarea && matchGestionado && matchTipoCli;
+        });
+
+        let countA = 0, countB = 0, countC = 0;
+        let contA = 0, contB = 0, contC = 0;
+
+        datosBase.forEach(c => {
+            if (c.clase === 'A') { countA++; if(c.contactado) contA++; }
+            else if (c.clase === 'B') { countB++; if(c.contactado) contB++; }
+            else { countC++; if(c.contactado) contC++; }
+        });
+
+        document.getElementById('count-clase-A').innerText = `${contA} / ${countA}`;
+        document.getElementById('count-clase-B').innerText = `${contB} / ${countB}`;
+        document.getElementById('count-clase-C').innerText = `${contC} / ${countC}`;
+
+        if (datosBase.length > 0) {
+            document.getElementById('contenedor-clasificacion').classList.remove('hidden');
+            
+            ['A', 'B', 'C'].forEach(cl => {
+                let btn = document.getElementById('btn-clase-' + cl);
+                if (filtrosActivos.clase === cl) {
+                    btn.classList.add('ring-4', 'ring-blue-300', 'bg-blue-50');
+                } else {
+                    btn.classList.remove('ring-4', 'ring-blue-300', 'bg-blue-50');
+                }
+            });
+        } else {
+            document.getElementById('contenedor-clasificacion').classList.add('hidden');
+        }
+
+        if (filtrosActivos.clase) {
+            DATA_FILTRADA = datosBase.filter(c => c.clase === filtrosActivos.clase);
+        } else {
+            DATA_FILTRADA = datosBase;
+        }
+
+        DATA_FILTRADA.sort((a, b) => {
+            if (modoTareas) {
+                if (a.alertContacto !== b.alertContacto) return a.alertContacto ? -1 : 1;
+                if (a.contactado !== b.contactado) return a.contactado ? 1 : -1;
+                if (a.clase !== b.clase) return a.clase.localeCompare(b.clase);
+                return b.montoHistorico - a.montoHistorico;
+            } else {
+                if (a.dep !== b.dep) return a.dep.localeCompare(b.dep);
+                if (a.mun !== b.mun) return a.mun.localeCompare(b.mun);
+                return b.montoHistorico - a.montoHistorico;
+            }
+        });
+
+        actualizarIndicadorUI();
+        renderListaPaginada();
+    }
+
+    function renderListaPaginada() {
+        const l = document.getElementById('lista');
+        const btnVerMas = document.getElementById('contenedor-ver-mas');
+
+        if(!DATA_FILTRADA || DATA_FILTRADA.length === 0) { 
+            let msg = "No se encontraron clientes para esta búsqueda";
+            l.innerHTML = `<div class="col-span-1 md:col-span-2 text-center py-20 text-slate-400 font-bold uppercase text-xs">${msg}</div>`; 
+            btnVerMas.classList.add('hidden');
+            return; 
+        }
+        
+        const paraRenderizar = DATA_FILTRADA.slice(0, PAGINA_ACTUAL);
+        
+        l.innerHTML = paraRenderizar.map(c => {
+            let badgeClase = '';
+            let colorSemaforo = '';
+            let accionTxt = '';
+            let isRojoOscuro = false;
+
+            if (c.alertContacto && !c.contactado) {
+                colorSemaforo = 'bg-rose-600 text-white font-black animate-pulse shadow-md border-rose-700';
+                accionTxt = '⚠️ URGENTE: REVISAR DATOS';
+                isRojoOscuro = true;
+            } else if (c.contactado) {
+                colorSemaforo = 'bg-emerald-100 text-emerald-700 border-emerald-200';
+                accionTxt = '🟢 Gestionado este mes';
+            } else {
+                if (c.clase === 'A') {
+                    colorSemaforo = 'bg-rose-100 text-rose-700 border-rose-200 shadow-sm';
+                    accionTxt = '🔴 Urgente: Visitar';
+                } else if (c.clase === 'B') {
+                    colorSemaforo = 'bg-amber-100 text-amber-700 border-amber-200';
+                    accionTxt = '🟡 Pendiente: Llamar';
+                } else {
+                    colorSemaforo = 'bg-slate-100 text-slate-600 border-slate-200';
+                    accionTxt = '⚪ Escribir / Mostrador';
+                }
+            }
+
+            if (c.clase === 'A') badgeClase = '⭐ VIP (A)';
+            else if (c.clase === 'B') badgeClase = '👍 Regular (B)';
+            else badgeClase = '👋 Esporádico (C)';
+
+            let borderCard = isRojoOscuro ? 'border-rose-500 shadow-rose-200 ring-2 ring-rose-200' : (c.clase === 'A' && !c.contactado ? 'border-rose-300 shadow-rose-100' : 'border-slate-200');
+            let nomLimpio = c.nombre.replace(/'/g, "");
+
+            return `
+            <div class="tarjeta-cliente bg-white p-6 md:p-8 rounded-[35px] shadow-sm border ${borderCard} flex flex-col justify-between transition-all hover:shadow-xl relative overflow-hidden">
+                ${isRojoOscuro ? '<div class="absolute top-0 left-0 w-full h-1 bg-rose-500"></div>' : ''}
+                <div class="mb-5">
+                    <div class="flex justify-between items-start mb-3">
+                        <div class="flex flex-col items-start gap-1">
+                            <p class="text-[10px] font-black text-blue-600 bg-blue-50 px-3 py-1 rounded-lg font-mono tracking-widest uppercase">${c.codigo}</p>
+                            <span class="text-[9px] font-black ${colorSemaforo} border px-2 py-1 rounded-md uppercase">${accionTxt}</span>
+                        </div>
+                        <div class="flex flex-col items-end gap-1">
+                            <span class="text-[9px] font-black text-slate-500 bg-slate-50 border px-2 py-1 rounded-md uppercase">${badgeClase}</span>
+                            <span class="text-[9px] font-black text-slate-400 uppercase truncate max-w-[120px]" title="${c.vend}">Asesor: ${c.vend.split(' ')[0]}</span>
+                        </div>
+                    </div>
+                    <h4 class="font-extrabold text-slate-800 text-xl leading-tight mb-4">${c.nombre}</h4>
+                    <div class="space-y-2">
+                        <p class="text-[11px] text-slate-600 font-bold flex items-center gap-2"><span class="text-sm">📍</span> ${c.mun}, ${c.dep}</p>
+                        <p class="text-[11px] text-slate-600 font-bold flex items-center gap-2"><span class="text-sm">📞</span> ${c.tel || 'No registrado'}</p>
+                        ${c.tipoCli ? `<p class="text-[11px] text-indigo-700 font-bold flex items-center gap-2"><span class="text-sm">🏷️</span> ${c.tipoCli}</p>` : ''}
+                    </div>
+                </div>
+                <button onclick="openM('${c.codigo}', '${nomLimpio}')" class="w-full ${c.contactado ? 'bg-slate-800' : 'bg-blue-600'} text-white font-bold text-xs py-4 rounded-2xl hover:bg-slate-900 transition-colors shadow-lg active:scale-95">📊 ANALIZAR VENTAS</button>
+            </div>`
+        }).join('');
+
+        if (DATA_FILTRADA.length > PAGINA_ACTUAL) {
+            btnVerMas.classList.remove('hidden');
+        } else {
+            btnVerMas.classList.add('hidden');
+        }
+    }
+
+    function cargarMasClientes() {
+        PAGINA_ACTUAL += 20;
+        renderListaPaginada();
+    }
+
+    function iniciarProcesoArchivo(input, tipo) {
+        const archivo = input.files[0];
+        if (!archivo) return;
+
+        const uiPrefix = tipo.toLowerCase();
+        document.getElementById('progreso-' + uiPrefix).classList.remove('hidden');
+        document.getElementById('estado-' + uiPrefix).innerText = "Leyendo archivo " + (archivo.name.endsWith('.csv') ? "CSV" : "Excel") + "...";
+
+        const extension = archivo.name.split('.').pop().toLowerCase();
+
+        if (extension === 'xlsx' || extension === 'xls') {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, {type: 'array'});
+                    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const datos = XLSX.utils.sheet_to_json(worksheet, {header: 1, raw: false, defval: ""});
+                    procesarDatosLimpios(datos, uiPrefix, tipo, input);
+                } catch(err) {
+                    alert("Error al leer el Excel. Verifica que no esté dañado.");
+                    document.getElementById('estado-' + uiPrefix).innerText = "Error.";
+                }
+            };
+            reader.readAsArrayBuffer(archivo);
+        } else {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                Papa.parse(e.target.result, {
+                    skipEmptyLines: true,
+                    complete: function(resultados) {
+                        procesarDatosLimpios(resultados.data, uiPrefix, tipo, input);
+                    }
+                });
+            };
+            reader.readAsText(archivo, "UTF-8");
+        }
+    }
+
+    function procesarDatosLimpios(datos, uiPrefix, tipo, input) {
+        if (!datos || datos.length === 0) {
+            alert("El archivo parece estar vacío.");
+            return;
+        }
+
+        if (datos[0].length === 1) {
+            let testStr = String(datos[0][0]);
+            if (testStr.includes(';')) datos = datos.map(row => String(row[0]).split(';'));
+            else if (testStr.includes('\t')) datos = datos.map(row => String(row[0]).split('\t'));
+            else if (testStr.includes(',')) datos = datos.map(row => String(row[0]).split(','));
+        }
+
+        const headers = datos[0].map(h => String(h).toLowerCase().trim());
+        const expectedLen = headers.length;
+
+        let codArtIndex = headers.findIndex(x => x === 'cód. art.' || x === 'cod. art.' || x.includes('cód. art') || x.includes('cod. art') || x.includes('artículo') || x.includes('articulo') || x.includes('item'));
+        let codCliIndex = headers.findIndex(x => x === 'código cliente' || x.includes('código clien') || x === 'código' || x === 'codigo');
+        let vendIndex = headers.findIndex(x => x === 'vendedor' || x.includes('vendedor') || x === 'facturador');
+
+        document.getElementById('estado-' + uiPrefix).innerText = "Protegiendo códigos y aplicando correcciones...";
+
+        let datosParseados = datos.slice(1).map(row => {
+            if (row.length === expectedLen + 1 && vendIndex !== -1) {
+                row[vendIndex] = String(row[vendIndex]).trim() + " " + String(row[vendIndex + 1]).trim();
+                row.splice(vendIndex + 1, 1);
+            }
+
+            if (codArtIndex !== -1 && codArtIndex < row.length) {
+                let val = String(row[codArtIndex] || "").trim();
+                if (val && !val.startsWith("'")) row[codArtIndex] = "'" + val;
+            }
+            if (codCliIndex !== -1 && codCliIndex < row.length) {
+                let val = String(row[codCliIndex] || "").trim();
+                if (val && !val.startsWith("'")) row[codCliIndex] = "'" + val;
+            }
+
+            if (row.length > expectedLen) row = row.slice(0, expectedLen);
+            while (row.length < expectedLen) row.push("");
+
+            return row;
+        });
+
+        let chunkSize = 5000;
+        let chunks = [];
+        for (let i = 0; i < datosParseados.length; i += chunkSize) {
+            chunks.push(datosParseados.slice(i, i + chunkSize));
+        }
+
+        let currentChunk = 0;
+        const funcionBackend = tipo === 'Ventas' ? 'procesarLoteVentas' : 'procesarLoteClientes';
+
+        function uploadNextChunk() {
+            if (currentChunk >= chunks.length) {
+                document.getElementById('barra-' + uiPrefix).style.width = '100%';
+                document.getElementById('estado-' + uiPrefix).innerText = "Finalizando...";
+                google.script.run.withSuccessHandler(function(res) {
+                    document.getElementById('estado-' + uiPrefix).innerText = "¡Completado!";
+                    actualizarDashboard();
+                    if(tipo === 'Clientes') loadC();
+                    input.value = ""; 
+                }).finalizarCargaCSV(tipo);
+                return;
+            }
+
+            let porcentaje = Math.round((currentChunk / chunks.length) * 100);
+            document.getElementById('barra-' + uiPrefix).style.width = `${porcentaje}%`;
+            document.getElementById('estado-' + uiPrefix).innerText = `Guardando lote ${currentChunk + 1} de ${chunks.length}...`;
+
+            let esPrimerLote = (currentChunk === 0);
+            google.script.run
+              .withSuccessHandler(function() {
+                  currentChunk++;
+                  uploadNextChunk();
+              })
+              .withFailureHandler(function(e) {
+                  alert("Error de conexión al subir. Reintenta.");
+                  document.getElementById('estado-' + uiPrefix).innerText = "Error.";
+              })
+              [funcionBackend](chunks[currentChunk], esPrimerLote);
+        }
+        
+        uploadNextChunk();
+    }
+
+    function buscarPorCodigo() {
+        const cod = document.getElementById('busc-prod-cod').value.trim();
+        if(cod.length < 2) { alert("Escribe un código válido"); return; }
+        
+        const btn = document.getElementById('btn-cod');
+        const listaSeleccion = document.getElementById('lista-productos-seleccion');
+        
+        btn.innerText = "⏳"; btn.disabled = true;
+        listaSeleccion.innerHTML = '';
+        
+        analizarTopExacto(cod, "Búsqueda por Código: " + cod);
+        
+        setTimeout(() => { btn.innerText = "Analizar Código Directo"; btn.disabled = false; }, 1000);
+    }
+
+    function buscarPorDesc() {
+        const input = document.getElementById('busc-prod-des');
+        const term = input.value;
+        if(term.length < 3) { alert("Escribe al menos 3 letras de la descripción."); return; }
+        
+        const btn = document.getElementById('btn-des');
+        const listaSeleccion = document.getElementById('lista-productos-seleccion');
+        const listaTop = document.getElementById('lista-resultados-top');
+        
+        btn.innerText = "⏳"; btn.disabled = true;
+        listaSeleccion.innerHTML = '<p class="text-center py-10 text-purple-500 font-black animate-pulse">Buscando productos en SAP...</p>';
+        listaTop.innerHTML = '';
+        document.getElementById('contenedor-ver-mas-prod').classList.add('hidden');
+
+        google.script.run.withSuccessHandler(res => {
+            btn.innerText = "Buscar en Productos"; btn.disabled = false;
+            
+            if(!res.exito) {
+                listaSeleccion.innerHTML = `<div class="text-center py-10 text-red-500 font-bold text-sm">Error: ${res.mensaje}</div>`;
+                return;
+            }
+
+            if(res.productos.length === 0) {
+                listaSeleccion.innerHTML = `<div class="text-center py-10 text-slate-400 font-bold text-sm">No se encontraron productos con esa descripción.</div>`;
+                return;
+            }
+
+            listaSeleccion.innerHTML = `<p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 text-center">Toca un producto para ver quién lo compra</p>` + 
+                res.productos.map(p => {
+                    let desLimpia = p.des.replace(/'/g, "\\'");
+                    return `
+                <div onclick="analizarTopExacto('${p.cod}', '${desLimpia}')" class="bg-white p-4 border rounded-2xl cursor-pointer hover:border-purple-400 hover:shadow-md transition-all flex justify-between items-center group text-left">
+                    <div class="pr-4">
+                        <span class="bg-purple-100 text-purple-600 px-2 py-0.5 rounded font-mono text-[10px] font-black">${p.cod}</span>
+                        <p class="text-xs font-black text-slate-700 mt-1">${p.des}</p>
+                    </div>
+                    <span class="text-slate-200 group-hover:text-purple-500 text-xl">➔</span>
+                </div>
+            `}).join('');
+
+        }).buscarListaProductos(term);
+    }
+
+    function analizarTopExacto(codArt, desArt) {
+        const listaSeleccion = document.getElementById('lista-productos-seleccion');
+        const listaTop = document.getElementById('lista-resultados-top');
+        const btnMas = document.getElementById('contenedor-ver-mas-prod');
+
+        listaSeleccion.innerHTML = `
+            <div class="bg-purple-50 p-5 rounded-3xl border border-purple-200 text-center relative">
+                <button onclick="document.getElementById('lista-productos-seleccion').innerHTML=''; document.getElementById('lista-resultados-top').innerHTML=''; document.getElementById('contenedor-ver-mas-prod').classList.add('hidden'); document.getElementById('filtros-prod-container').classList.add('hidden'); RESULTADOS_PROD_DATA=[]; filtrosProd={vend:null,dep:null,mun:null};" class="absolute top-2 right-4 text-purple-300 hover:text-purple-600 text-2xl">×</button>
+                <p class="text-[9px] font-black text-purple-400 uppercase tracking-widest mb-1">Analizando Producto Exacto</p>
+                <span class="bg-white text-purple-600 px-2 py-0.5 rounded font-mono text-[10px] border font-black">${codArt}</span>
+                <p class="text-sm font-black text-purple-800 mt-1 leading-tight">${desArt}</p>
+            </div>
+        `;
+        
+        listaTop.innerHTML = '<div class="text-center py-20 text-purple-500 font-black animate-pulse uppercase tracking-widest text-xs">Calculando ranking de compradores...</div>';
+        btnMas.classList.add('hidden');
+
+        google.script.run.withSuccessHandler(res => {
+            if(!res.exito) {
+                listaTop.innerHTML = `<div class="text-center py-10 text-red-500 font-bold text-sm">Error: ${res.mensaje}</div>`;
+                return;
+            }
+
+            if(res.resultados.length === 0) {
+                listaTop.innerHTML = `<div class="text-center py-10 text-slate-400 font-bold text-sm">Nadie ha comprado este producto recientemente.</div>`;
+                return;
+            }
+
+            let crmMap = {};
+            DATA.forEach(c => { if (c.codigo) crmMap[String(c.codigo).toUpperCase()] = c; });
+            RESULTADOS_PROD_DATA = res.resultados.map(r => {
+                let m = crmMap[String(r.codigo).toUpperCase()];
+                return Object.assign({}, r, {
+                    vend: m ? m.vend : '',
+                    dep: m ? m.dep : '',
+                    mun: m ? m.mun : ''
+                });
+            });
+            filtrosProd = { vend: null, dep: null, mun: null };
+            PAGINA_PROD = 20;
+            renderListaProd();
+
+        }).analizarTopClientesProd(codArt);
+    }
+
+    function toggleFiltroProd(tipo, valor) {
+        if (filtrosProd[tipo] === valor) filtrosProd[tipo] = null;
+        else {
+            filtrosProd[tipo] = valor;
+            if (tipo === 'dep') filtrosProd.mun = null;
+        }
+        PAGINA_PROD = 20;
+        renderListaProd();
+    }
+
+    function limpiarFiltrosProd() {
+        filtrosProd = { vend: null, dep: null, mun: null };
+        PAGINA_PROD = 20;
+        renderListaProd();
+    }
+
+    function aplicarFiltrosProd(arr) {
+        return arr.filter(c => {
+            let mv = !filtrosProd.vend || c.vend === filtrosProd.vend;
+            let md = !filtrosProd.dep || c.dep === filtrosProd.dep;
+            let mm = !filtrosProd.mun || c.mun === filtrosProd.mun;
+            return mv && md && mm;
+        });
+    }
+
+    function renderChipsProd() {
+        const cont = document.getElementById('filtros-prod-container');
+        if (!RESULTADOS_PROD_DATA || RESULTADOS_PROD_DATA.length === 0) {
+            cont.classList.add('hidden');
+            return;
+        }
+        cont.classList.remove('hidden');
+
+        let vCounts = {}, dCounts = {}, mCounts = {};
+        RESULTADOS_PROD_DATA.forEach(c => {
+            let mv = filtrosProd.vend ? c.vend === filtrosProd.vend : true;
+            let md = filtrosProd.dep ? c.dep === filtrosProd.dep : true;
+            let mm = filtrosProd.mun ? c.mun === filtrosProd.mun : true;
+            if (md && mm && c.vend) vCounts[c.vend] = (vCounts[c.vend] || 0) + 1;
+            if (mv && mm && c.dep) dCounts[c.dep] = (dCounts[c.dep] || 0) + 1;
+            if (mv && md && c.mun) mCounts[c.mun] = (mCounts[c.mun] || 0) + 1;
+        });
+
+        const contVend = document.getElementById('chip-prod-vendedores');
+        let keysV = Object.keys(vCounts).sort();
+        contVend.innerHTML = keysV.length === 0
+            ? '<p class="text-[10px] text-slate-400 font-bold">Sin asesor asignado en los resultados</p>'
+            : keysV.map(v => {
+                let activo = filtrosProd.vend === v;
+                let safe = v.split("'").join("&#39;");
+                return '<button onclick="toggleFiltroProd(\'vend\', \'' + safe + '\')" class="px-4 py-2 rounded-full text-[11px] font-bold border transition-colors ' +
+                    (activo ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-slate-600 hover:bg-slate-50 border-slate-200') + '">' +
+                    v + ' <span class="' + (activo ? 'text-blue-200' : 'text-slate-400') + ' ml-1">(' + vCounts[v] + ')</span></button>';
+            }).join('');
+
+        const contDep = document.getElementById('chip-prod-departamentos');
+        let keysD = Object.keys(dCounts).sort();
+        contDep.innerHTML = keysD.length === 0
+            ? '<p class="text-[10px] text-slate-400 font-bold">Sin zona asignada en los resultados</p>'
+            : keysD.map(d => {
+                let activo = filtrosProd.dep === d;
+                let safe = d.split("'").join("&#39;");
+                return '<button onclick="toggleFiltroProd(\'dep\', \'' + safe + '\')" class="px-4 py-2 rounded-full text-[11px] font-bold border transition-colors ' +
+                    (activo ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-600 hover:bg-slate-50 border-slate-200') + '">' +
+                    d + ' <span class="' + (activo ? 'text-indigo-200' : 'text-slate-400') + ' ml-1">(' + dCounts[d] + ')</span></button>';
+            }).join('');
+
+        const contMunWrap = document.getElementById('chip-prod-municipios-container');
+        const contMun = document.getElementById('chip-prod-municipios');
+        let keysM = Object.keys(mCounts).sort();
+        if ((filtrosProd.dep || filtrosProd.vend) && keysM.length > 0) {
+            contMunWrap.classList.remove('hidden');
+            contMun.innerHTML = keysM.map(m => {
+                let activo = filtrosProd.mun === m;
+                let safe = m.split("'").join("&#39;");
+                return '<button onclick="toggleFiltroProd(\'mun\', \'' + safe + '\')" class="px-4 py-2 rounded-full text-[11px] font-bold border transition-colors ' +
+                    (activo ? 'bg-purple-600 text-white border-purple-600' : 'bg-white text-slate-600 hover:bg-slate-50 border-slate-200') + '">' +
+                    m + ' <span class="' + (activo ? 'text-purple-200' : 'text-slate-400') + ' ml-1">(' + mCounts[m] + ')</span></button>';
+            }).join('');
+        } else {
+            contMunWrap.classList.add('hidden');
+        }
+
+        const btnLimpiar = document.getElementById('btn-limpiar-filtros-prod');
+        const hayFiltro = filtrosProd.vend || filtrosProd.dep || filtrosProd.mun;
+        if (hayFiltro) btnLimpiar.classList.remove('hidden');
+        else btnLimpiar.classList.add('hidden');
+    }
+
+    function renderListaProd() {
+        const listaTop = document.getElementById('lista-resultados-top');
+        const btnMas = document.getElementById('contenedor-ver-mas-prod');
+
+        renderChipsProd();
+
+        const dataFiltrada = aplicarFiltrosProd(RESULTADOS_PROD_DATA);
+        const paraRenderizar = dataFiltrada.slice(0, PAGINA_PROD);
+
+        if (dataFiltrada.length === 0 && RESULTADOS_PROD_DATA.length > 0) {
+            listaTop.innerHTML = `<div class="text-center py-10 text-slate-400 font-bold text-sm">Ningún comprador coincide con los filtros activos.</div>`;
+            btnMas.classList.add('hidden');
+            return;
+        }
+
+        listaTop.innerHTML = `<p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 mt-6 text-center">Mostrando ${paraRenderizar.length} de ${dataFiltrada.length} Clientes</p>` +
+            paraRenderizar.map((c, i) => {
+                let nomLimpio = c.nombre.replace(/'/g, "");
+                return `
+            <div class="bg-white p-6 rounded-[30px] shadow-sm border border-slate-200 flex justify-between items-center hover:shadow-lg transition-all text-left">
+                <div class="flex items-center gap-4">
+                    <div class="w-10 h-10 min-w-[40px] bg-purple-100 text-purple-600 rounded-full flex items-center justify-center font-black">${i+1}</div>
+                    <div>
+                        <p class="text-[9px] font-black text-purple-500 font-mono tracking-widest uppercase mb-0.5">${c.codigo}</p>
+                        <h4 class="font-extrabold text-slate-800 text-sm leading-none">${c.nombre}</h4>
+                    </div>
+                </div>
+                
+                <div class="text-right flex items-center">
+                    <div class="mr-4 hidden sm:flex flex-col items-end">
+                        <p class="text-[10px] text-slate-400 font-bold uppercase mb-1">Monto Total</p>
+                        <p class="text-lg font-black text-slate-900 mb-1">$${c.total.toLocaleString('en-US',{minimumFractionDigits:2, maximumFractionDigits:2})}</p>
+                        <div class="flex gap-1 flex-wrap justify-end max-w-[150px]">
+                            ${Object.keys(c.anios).sort().reverse().map(y => `<span class="bg-purple-50 text-purple-700 border border-purple-100 px-2 py-0.5 rounded text-[9px] font-black">${y}: $${c.anios[y].toLocaleString('en-US',{minimumFractionDigits:2, maximumFractionDigits:2})}</span>`).join('')}
+                        </div>
+                    </div>
+                    <button onclick="openM('${c.codigo}', '${nomLimpio}')" class="bg-slate-100 text-slate-400 hover:text-white hover:bg-purple-600 w-10 h-10 flex items-center justify-center rounded-full transition-colors font-bold shadow-sm ml-4">➔</button>
+                </div>
+            </div>
+        `}).join('');
+
+        if (dataFiltrada.length > PAGINA_PROD) btnMas.classList.remove('hidden');
+        else btnMas.classList.add('hidden');
+    }
+
+    function cargarMasProd() {
+        PAGINA_PROD += 20;
+        renderListaProd();
+    }
+
+    function openM(cod, nom) {
+        const m = document.getElementById('modal');
+        const loader = document.getElementById('modal-loader');
+        
+        m.children[0].scrollTop = 0; 
+        
+        document.getElementById('mNom').innerText = nom;
+        document.getElementById('mCod').innerText = cod;
+        
+        loader.style.display = 'flex';
+        
+        document.getElementById('mDir').innerText = '--';
+        document.getElementById('mDep').innerText = '--';
+        document.getElementById('mTel1').innerText = '--';
+        document.getElementById('mTel2').innerText = '--';
+        document.getElementById('mVend').innerText = '--';
+        document.getElementById('mAnios').innerHTML = '';
+        document.getElementById('mCrecimiento').innerHTML = '';
+        document.getElementById('mMeses').innerHTML = '';
+        document.getElementById('mTop').innerHTML = '';
+        document.getElementById('mLog').innerHTML = '';
+        document.getElementById('mHistorial').innerHTML = '';
+
+        m.classList.remove('opacity-0', 'pointer-events-none');
+        m.children[0].classList.remove('scale-95');
+        m.children[0].classList.add('scale-100');
+        
+        google.script.run
+            .withSuccessHandler(res => {
+                loader.style.display = 'none';
+                
+                if(res.errorMsg) { 
+                    alert("Error en Base de Datos: " + res.errorMsg);
+                    closeM();
+                    return; 
+                }
+                
+                document.getElementById('mDir').innerText = res.contacto.dir;
+                document.getElementById('mDep').innerText = res.contacto.mun + ', ' + res.contacto.dep;
+                document.getElementById('mTel1').innerText = res.contacto.tel1;
+                document.getElementById('mTel2').innerText = res.contacto.tel2;
+                document.getElementById('mVend').innerText = res.contacto.vend;
+
+                if(res.anios.length > 0) {
+                    document.getElementById('mAnios').innerHTML = res.anios.map(a => `<div class="flex justify-between border-b border-slate-200 pb-1"><span>${a.a}</span><span class="text-slate-800 font-black">$${a.v.toLocaleString('en-US',{minimumFractionDigits:2, maximumFractionDigits:2})}</span></div>`).join('');
+                    
+                    if (res.anios.length >= 2) {
+                        let actual = res.anios[0].v; 
+                        let anterior = res.anios[1].v; 
+                        let diferencia = ((actual - anterior) / anterior) * 100;
+                        let colorClass = diferencia >= 0 ? 'text-emerald-600 bg-emerald-50' : 'text-rose-600 bg-rose-50';
+                        let icono = diferencia >= 0 ? '📈 +' : '📉 ';
+                        document.getElementById('mCrecimiento').innerHTML = `<div class="mt-4 p-3 rounded-xl text-center ${colorClass} text-[11px] font-black uppercase tracking-widest">${icono}${diferencia.toFixed(2)}% vs ${res.anios[1].a}</div>`;
+                    }
+                } else {
+                    document.getElementById('mAnios').innerHTML = '<p class="text-xs text-slate-400 text-center">Sin registro de fechas</p>';
+                }
+
+                if(res.meses.length > 0) {
+                    document.getElementById('mMeses').innerHTML = res.meses.map(m => `<div class="flex justify-between border-b border-blue-100 pb-1"><span>${m.n}</span><span class="text-blue-600 font-black">$${m.v.toLocaleString('en-US',{minimumFractionDigits:2, maximumFractionDigits:2})}</span></div>`).join('');
+                    
+                    let etiquetasGrafico = res.meses.map(m => m.n).reverse();
+                    let valoresGrafico = res.meses.map(m => m.v).reverse();
+
+                    if(chartInstancia) chartInstancia.destroy();
+
+                    const ctx = document.getElementById('graficoVentas').getContext('2d');
+                    chartInstancia = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: etiquetasGrafico,
+                            datasets: [{
+                                label: 'Ventas USD',
+                                data: valoresGrafico,
+                                backgroundColor: 'rgba(37, 99, 235, 0.9)', 
+                                hoverBackgroundColor: 'rgba(29, 78, 216, 1)',
+                                borderRadius: 6,
+                                borderSkipped: false
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            animation: { duration: 1500, easing: 'easeOutQuart' },
+                            plugins: { legend: { display: false } },
+                            scales: {
+                                y: { beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { font: { size: 10, family: 'Inter' } } },
+                                x: { grid: { display: false }, ticks: { font: { size: 10, family: 'Inter' } } }
+                            }
+                        }
+                    });
+                } else {
+                    document.getElementById('mMeses').innerHTML = '<p class="text-xs text-slate-400 text-center">Sin registro mensual</p>';
+                    if(chartInstancia) chartInstancia.destroy();
+                }
+
+                if(res.top10.length > 0) {
+                    document.getElementById('mTop').innerHTML = res.top10.map((p,i) => `<div class="flex justify-between border-b border-slate-200 pb-1"><span class="truncate pr-2">${i+1}. ${p.n}</span><span class="text-slate-800 font-black">$${p.v.toLocaleString('en-US',{minimumFractionDigits:2, maximumFractionDigits:2})}</span></div>`).join('');
+                } else {
+                    document.getElementById('mTop').innerHTML = '<p class="text-xs text-slate-400 text-center">Sin registro de productos</p>';
+                }
+                
+                if(res.log.length > 0) {
+                    document.getElementById('mLog').innerHTML = res.log.map(l => `<tr class="border-b border-slate-100"><td class="py-2">${l.fec}</td><td class="font-mono text-blue-500">${l.cor}</td><td class="text-right text-slate-800 font-black">$${l.mon.toLocaleString('en-US',{minimumFractionDigits:2, maximumFractionDigits:2})}</td></tr>`).join('');
+                } else {
+                    document.getElementById('mLog').innerHTML = '<tr><td colspan="3" class="text-center text-xs text-slate-400 py-4">No hay facturas registradas</td></tr>';
+                }
+
+                if(res.historialCRM && res.historialCRM.length > 0) {
+                    document.getElementById('mHistorial').innerHTML = res.historialCRM.map(h => {
+                        let fParts = h.fec.split(' ');
+                        let fechaSola = fParts[0] || h.fec;
+                        let horaSola = fParts[1] || '';
+                        let badgeTipo = '';
+                        if(h.tip.includes('Visita')) badgeTipo = 'bg-rose-100 text-rose-700 border-rose-200';
+                        else if(h.tip.includes('Llamada')) badgeTipo = 'bg-blue-100 text-blue-700 border-blue-200';
+                        else if(h.tip.includes('WhatsApp')) badgeTipo = 'bg-emerald-100 text-emerald-700 border-emerald-200';
+                        else badgeTipo = 'bg-purple-100 text-purple-700 border-purple-200';
+
+                        return `
+                        <tr class="hover:bg-indigo-50/50 transition-colors">
+                            <td class="py-2 pr-2 text-[9px] text-slate-500 font-medium">
+                                <span class="block">${fechaSola}</span>
+                                <span class="block text-[8px] opacity-70">${horaSola}</span>
+                            </td>
+                            <td class="py-2 pr-2 text-[9px] text-indigo-600 font-bold truncate max-w-[100px]" title="${h.usr}">${h.usr}</td>
+                            <td class="py-2 pr-2"><span class="px-1.5 py-0.5 border rounded text-[8px] font-black uppercase ${badgeTipo}">${h.tip}</span></td>
+                            <td class="py-2 text-[10px] text-slate-600 italic leading-snug whitespace-normal" title="${h.not}">${h.not || 'Sin notas.'}</td>
+                        </tr>
+                        `;
+                    }).join('');
+                } else {
+                    document.getElementById('mHistorial').innerHTML = '<tr><td colspan="4" class="text-center text-xs text-slate-400 py-4 italic">No hay gestiones previas registradas.</td></tr>';
+                }
+            })
+            .withFailureHandler(err => {
+                loader.style.display = 'none';
+                alert("Hubo un error al calcular los datos.");
+            })
+            .obtenerDetalleCliente(cod);
+    }
+
+    function closeM() { 
+        const m = document.getElementById('modal');
+        m.classList.add('opacity-0', 'pointer-events-none'); 
+        m.children[0].classList.add('scale-95');
+    }
+
+    function saveV() {
+        const btn = document.getElementById('btnSave');
+        const tipoSelect = document.querySelector('input[name="tipoInteraccion"]:checked');
+        if(!tipoSelect) { alert("Selecciona un tipo de interacción"); return; }
+
+        const codCliente = document.getElementById('mCod').innerText;
+        const nomCliente = document.getElementById('mNom').innerText;
+        const notaStr = document.getElementById('nota').value;
+
+        if (tipoSelect.value.includes('Visita')) {
+            if (navigator.geolocation) {
+                btn.innerText = "📍 OBTENIENDO GPS...";
+                btn.disabled = true;
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        let linkGPS = `https://www.google.com/maps?q=${position.coords.latitude},${position.coords.longitude}`;
+                        ejecutarGuardadoDB(codCliente, nomCliente, tipoSelect.value, notaStr, linkGPS);
+                    },
+                    (error) => {
+                        alert("No se pudo obtener el GPS. Guardando visita sin ubicación.");
+                        ejecutarGuardadoDB(codCliente, nomCliente, tipoSelect.value, notaStr, "Permiso GPS denegado");
+                    },
+                    { enableHighAccuracy: true, timeout: 10000 }
+                );
+            } else {
+                ejecutarGuardadoDB(codCliente, nomCliente, tipoSelect.value, notaStr, "GPS no soportado");
+            }
+        } else {
+            ejecutarGuardadoDB(codCliente, nomCliente, tipoSelect.value, notaStr, "N/A");
+        }
+    }
+
+    function ejecutarGuardadoDB(codCliente, nomCliente, tipo, nota, gps) {
+        const btn = document.getElementById('btnSave');
+        btn.innerText = "GUARDANDO..."; btn.disabled = true;
+        
+        google.script.run.withSuccessHandler((res) => {
+
+            if (tipo === "No se obtuvo respuesta por llamada") {
+                alert("Registro guardado. El cliente seguirá apareciendo pendiente en la ruta.");
+            } else {
+                alert("Visita registrada. El cliente ha pasado a color verde ✅");
+            }
+
+            btn.innerText = "✅ GUARDAR INTERACCIÓN"; btn.disabled = false;
+            document.getElementById('nota').value = "";
+            closeM();
+
+            let clienteEncontrado = DATA.find(c => c.codigo === codCliente);
+            if (clienteEncontrado) {
+                if(tipo === "No se obtuvo respuesta por llamada") {
+                    clienteEncontrado.noRespuestaCount = (clienteEncontrado.noRespuestaCount || 0) + 1;
+                    if(clienteEncontrado.noRespuestaCount >= 3) {
+                        clienteEncontrado.alertContacto = true;
+                    }
+                } else {
+                    clienteEncontrado.contactado = true;
+                }
+            }
+            aplicarFiltros();
+
+            if (usuarioRol === 'Admin') {
+                cargarCockpit();
+                if (!document.getElementById('vista-reportes').classList.contains('hidden')) {
+                    cargarTimelinesEquipo();
+                }
+            } else if (res && typeof res.atendidosHoy === 'number') {
+                atendidosHoyUsuario = res.atendidosHoy;
+                actualizarCockpit(atendidosHoyUsuario, metaDiariaUsuario);
+                cargarTimelineUsuario();
+            } else {
+                cargarCockpit();
+                cargarTimelineUsuario();
+            }
+
+            if(document.getElementById('vista-reportes').classList.contains('hidden') === false) {
+                fetchVisitasAdmin();
+            }
+
+        }).guardarVisita({
+            codigo: codCliente, 
+            nombre: nomCliente, 
+            tipoInteraccion: tipo,
+            comentario: nota,
+            gps: gps
+        }, usuarioLogueado);
+    }
+
+    // ==========================================
+    // MÓDULO EXCLUSIVO PARA EL DIRECTOR / ADMIN
+    // ==========================================
+    function fetchEstadoUsuarios() {
+        document.getElementById('rep-estado-usuarios').innerHTML = '<p class="text-xs text-slate-400 col-span-3 text-center py-4 animate-pulse">Consultando servidor...</p>';
+        google.script.run.withSuccessHandler(res => {
+            if(res.exito) {
+                const hoy = new Date().toLocaleDateString('es-SV', {day: '2-digit', month: '2-digit', year: 'numeric'});
+                
+                let htmlUsers = res.usuarios.map(u => {
+                    let esHoy = u.ultimoAcceso.includes(hoy);
+                    let colorBorde = esHoy ? 'border-emerald-300 shadow-emerald-100' : 'border-slate-200';
+                    let badgeTxt = esHoy ? '🟢 ACTIVO HOY' : '⚪ OFFLINE';
+                    let badgeColor = esHoy ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500';
+
+                    return `
+                        <div class="bg-white p-4 rounded-2xl border ${colorBorde} shadow-sm flex flex-col justify-between">
+                            <div class="flex justify-between items-start mb-2">
+                                <span class="px-2 py-0.5 rounded text-[8px] font-black uppercase ${badgeColor}">${badgeTxt}</span>
+                                <span class="text-[9px] font-bold text-slate-400">${u.rol}</span>
+                            </div>
+                            <p class="text-sm font-black text-slate-800 truncate" title="${u.email}">${u.alias}</p>
+                            <p class="text-[10px] text-slate-500 mt-1">Última conexión: <span class="font-bold">${u.ultimoAcceso}</span></p>
+                        </div>
+                    `;
+                }).join('');
+                document.getElementById('rep-estado-usuarios').innerHTML = htmlUsers;
+            } else {
+                document.getElementById('rep-estado-usuarios').innerHTML = `<p class="text-xs text-red-500 col-span-3 text-center py-4">Error: ${res.mensaje}</p>`;
+            }
+        }).obtenerEstadoUsuarios();
+    }
+
+    function fetchVisitasAdmin() {
+        document.getElementById('rep-loader').classList.remove('hidden');
+        document.getElementById('rep-contenido').classList.add('hidden');
+        document.getElementById('rep-vacio').classList.add('hidden');
+
+        google.script.run.withSuccessHandler(res => {
+            if(res.exito) {
+                DATA_VISITAS_ADMIN = res.visitas;
+                HOY_SERVER = res.hoyStr; 
+                
+                let mesesUnicos = new Set();
+                DATA_VISITAS_ADMIN.forEach(v => {
+                    let parts = v.fecha.split(' ')[0].split('/');
+                    if(parts.length >= 3) {
+                        let mesStr = parseInt(parts[1], 10).toString(); 
+                        mesesUnicos.add(`${mesStr}/${parts[2].substring(0,4)}`);
+                    }
+                });
+                
+                let currentM = `${new Date().getMonth() + 1}/${new Date().getFullYear()}`;
+                if(mesesUnicos.size === 0) mesesUnicos.add(currentM);
+
+                const selectMes = document.getElementById('rep-mes');
+                selectMes.innerHTML = '';
+                const nombresMeses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+                
+                let arrMeses = Array.from(mesesUnicos).sort((a,b) => {
+                    let [mA, yA] = a.split('/').map(Number);
+                    let [mB, yB] = b.split('/').map(Number);
+                    if(yA !== yB) return yB - yA;
+                    return mB - mA;
+                });
+                
+                arrMeses.forEach(m => {
+                    let [mesNum, anioNum] = m.split('/').map(Number);
+                    let op = document.createElement('option');
+                    op.value = m; 
+                    op.text = `${nombresMeses[mesNum - 1]} ${anioNum}`;
+                    selectMes.appendChild(op);
+                });
+
+                if(arrMeses.includes(currentM)) selectMes.value = currentM;
+
+                loadReportes(); 
+            } else {
+                alert("Error cargando auditoría: " + res.mensaje);
+            }
+        }).obtenerReportesAdmin();
+    }
+
+    function loadReportes() {
+        const vend = document.getElementById('rep-vendedor').value;
+        const mesSelectedVal = document.getElementById('rep-mes').value || "1/2026";
+        let [mesSelected, anioSelected] = mesSelectedVal.split('/').map(Number);
+
+        document.getElementById('rep-loader').classList.add('hidden');
+        document.getElementById('rep-vacio').classList.add('hidden');
+        document.getElementById('rep-contenido').classList.remove('hidden');
+
+        let mapCodToVend = {};
+        DATA.forEach(c => mapCodToVend[c.codigo] = c.vend);
+
+        let visitasFiltradas = DATA_VISITAS_ADMIN.filter(v => {
+            let assignedVend = mapCodToVend[v.cod] || "SIN VENDEDOR ASIGNADO";
+            if(vend !== "" && assignedVend !== vend) return false;
+
+            let parts = v.fecha.split(' ')[0].split('/');
+            if(parts.length >= 3) {
+                return parseInt(parts[1], 10) === mesSelected && parseInt(parts[2].substring(0,4), 10) === anioSelected;
+            }
+            return false;
+        });
+
+        let countV = 0, countL = 0, countW = 0, countS = 0;
+        let interaccionesPorAlias = {}; 
+
+        visitasFiltradas.forEach(v => {
+            let t = v.tipo.toLowerCase();
+            if(t.includes('visita')) countV++;
+            else if(t.includes('llamada') && !t.includes('respuesta')) countL++;
+            else if(t.includes('whatsapp')) countW++;
+            else if(t.includes('sala')) countS++;
+
+            interaccionesPorAlias[v.usuario] = (interaccionesPorAlias[v.usuario] || 0) + 1;
+        });
+
+        let totalA = 0, gestA = 0;
+        let totalB = 0, gestB = 0;
+        let totalC = 0, gestC = 0;
+        let codigosTocadosMes = new Set(visitasFiltradas.map(v => v.cod));
+        
+        DATA.filter(c => (vend === "" || c.vend === vend)).forEach(c => {
+            let tocado = codigosTocadosMes.has(c.codigo);
+            if (c.clase === 'A') { totalA++; if(tocado) gestA++; }
+            else if (c.clase === 'B') { totalB++; if(tocado) gestB++; }
+            else { totalC++; if(tocado) gestC++; }
+        });
+        
+        let pctCobertura = totalA === 0 ? 0 : Math.round((gestA / totalA) * 100);
+
+        document.getElementById('rep-kpis').innerHTML = `
+            <div class="bg-blue-50 border border-blue-200 p-4 rounded-[25px] text-center shadow-sm">
+                <p class="text-[9px] font-black text-blue-500 uppercase mb-1">Total Gestiones</p>
+                <p class="text-2xl font-black text-blue-800">${visitasFiltradas.length}</p>
+            </div>
+            <div class="bg-rose-50 border border-rose-200 p-4 rounded-[25px] text-center shadow-sm">
+                <p class="text-[9px] font-black text-rose-500 uppercase mb-1">Visitas Físicas</p>
+                <p class="text-2xl font-black text-rose-800">${countV}</p>
+            </div>
+            <div class="bg-emerald-50 border border-emerald-200 p-4 rounded-[25px] text-center shadow-sm">
+                <p class="text-[9px] font-black text-emerald-500 uppercase mb-1">📱/📞 Remotas</p>
+                <p class="text-2xl font-black text-emerald-800">${countW + countL}</p>
+            </div>
+            <div class="bg-amber-50 border border-amber-200 p-4 rounded-[25px] text-center shadow-sm">
+                <p class="text-[9px] font-black text-amber-500 uppercase mb-1">Cobertura VIP</p>
+                <p class="text-2xl font-black text-amber-800">${pctCobertura}%</p>
+            </div>
+        `;
+
+        const ctxAdmin = document.getElementById('chartProgresoAdmin').getContext('2d');
+        if(chartInstanciaAdmin) chartInstanciaAdmin.destroy();
+        chartInstanciaAdmin = new Chart(ctxAdmin, {
+            type: 'bar',
+            data: {
+                labels: ['VIP (A)', 'Regulares (B)', 'Esporádicos (C)'],
+                datasets: [
+                    { label: 'Gestionados', data: [gestA, gestB, gestC], backgroundColor: '#10b981', borderRadius: 4 },
+                    { label: 'Pendientes', data: [totalA - gestA, totalB - gestB, totalC - gestC], backgroundColor: '#cbd5e1', borderRadius: 4 }
+                ]
+            },
+            options: { 
+                responsive: true, 
+                maintainAspectRatio: false,
+                scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true } },
+                plugins: { legend: { position: 'bottom', labels: { font: { size: 10 } } } }
+            }
+        });
+
+        let aliasHtml = Object.keys(interaccionesPorAlias).sort((a,b) => interaccionesPorAlias[b] - interaccionesPorAlias[a]).map(usr => `
+            <div class="flex justify-between items-center bg-blue-50 border border-blue-100 p-3 rounded-xl mb-2">
+                <span class="text-xs font-black text-slate-700">${usr}</span>
+                <span class="text-sm font-black text-blue-600 bg-white px-2 py-0.5 rounded shadow-sm">${interaccionesPorAlias[usr]}</span>
+            </div>
+        `).join('');
+        document.getElementById('rep-alias-list').innerHTML = aliasHtml || '<p class="text-xs text-slate-400 text-center py-4">Sin datos de usuarios.</p>';
+
+        // Resumen de gestiones por usuario con detalle de vendedor asignado
+        let resumenPorUsuario = {};
+        visitasFiltradas.forEach(v => {
+            if(!resumenPorUsuario[v.usuario]) resumenPorUsuario[v.usuario] = { total: 0, vendedores: {} };
+            resumenPorUsuario[v.usuario].total++;
+            let realVend = mapCodToVend[v.cod] || "SIN VENDEDOR ASIGNADO";
+            resumenPorUsuario[v.usuario].vendedores[realVend] = (resumenPorUsuario[v.usuario].vendedores[realVend] || 0) + 1;
+        });
+
+        let htmlResumenUsuarios = Object.keys(resumenPorUsuario).sort((a,b) => resumenPorUsuario[b].total - resumenPorUsuario[a].total).map(usr => {
+            let data = resumenPorUsuario[usr];
+            let vendDetalleHtml = Object.keys(data.vendedores).sort((a,b) => data.vendedores[b] - data.vendedores[a]).map(vend => `
+                <div class="flex justify-between items-center py-2 px-3 bg-slate-50 rounded-lg">
+                    <span class="text-[10px] font-bold text-slate-600 truncate max-w-[70%]" title="${vend}">${vend}</span>
+                    <span class="text-[11px] font-black text-slate-800 bg-white px-2 py-0.5 rounded shadow-sm">${data.vendedores[vend]}</span>
+                </div>
+            `).join('');
+            return `
+                <details class="bg-slate-50 border border-slate-200 rounded-2xl overflow-hidden group shadow-sm">
+                    <summary class="cursor-pointer px-5 py-4 font-black text-xs text-slate-700 flex justify-between items-center outline-none select-none hover:bg-slate-100 transition-colors">
+                        <span class="flex items-center gap-3">
+                            <span class="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-sm font-black">${usr.charAt(0).toUpperCase()}</span>
+                            <span class="text-sm font-black text-slate-800">${usr}</span>
+                        </span>
+                        <span class="flex items-center gap-2">
+                            <span class="bg-blue-600 text-white text-xs font-black px-3 py-1 rounded-full">${data.total} gestiones</span>
+                            <span class="text-slate-400 group-open:rotate-180 transition-transform text-[10px]">▼</span>
+                        </span>
+                    </summary>
+                    <div class="p-4 border-t border-slate-100 bg-white space-y-1">
+                        <p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Vendedor asignado del cliente gestionado</p>
+                        ${vendDetalleHtml}
+                    </div>
+                </details>
+            `;
+        }).join('');
+        document.getElementById('rep-resumen-usuarios').innerHTML = htmlResumenUsuarios || '<p class="text-xs text-slate-400 text-center py-4">Sin gestiones en el mes seleccionado.</p>';
+
+        let htmlHoy = '';
+        let historialAgrupado = {};
+        let countHoy = 0;
+
+        visitasFiltradas.forEach(v => {
+            let badgeTipo = '';
+            if(v.tipo.includes('Visita')) badgeTipo = 'bg-rose-100 text-rose-700';
+            else if(v.tipo.includes('Llamada')) badgeTipo = 'bg-blue-100 text-blue-700';
+            else if(v.tipo.includes('WhatsApp')) badgeTipo = 'bg-emerald-100 text-emerald-700';
+            else if(v.tipo.includes('respuesta')) badgeTipo = 'bg-slate-200 text-slate-700';
+            else badgeTipo = 'bg-purple-100 text-purple-700';
+
+            let gpsLink = v.gps.includes('http') ? `<a href="${v.gps}" target="_blank" class="text-blue-500 hover:underline font-black">📍 Ver Mapa</a>` : `<span class="text-slate-300">${v.gps}</span>`;
+            
+            let fParts = v.fecha.split(' ');
+            let fSol = fParts[0] || v.fecha;
+            let hSol = fParts[1] || '--:--';
+            let realVend = mapCodToVend[v.cod] || "Desconocido";
+
+            let rowHtml = `
+                <tr class="hover:bg-slate-100 transition-colors">
+                    <td class="py-3 pl-3 pr-4 text-[10px] text-slate-500 font-bold">${fSol} <span class="ml-1 text-[9px] opacity-70">${hSol}</span></td>
+                    <td class="py-3 pr-4 text-[10px] text-blue-600 font-bold truncate max-w-[100px]">${v.usuario}</td>
+                    <td class="py-3 pr-4 text-[9px] font-black text-slate-400 uppercase truncate max-w-[100px]" title="${realVend}">${realVend}</td>
+                    <td class="py-3 pr-4 text-xs font-bold text-slate-800 truncate max-w-[150px]" title="${v.nom}"><span class="block text-[9px] text-slate-400 font-mono mb-0.5">${v.cod}</span>${v.nom}</td>
+                    <td class="py-3 pr-4 text-[10px] text-slate-600 truncate max-w-[200px]" title="${v.nota}">${v.nota || '---'}</td>
+                    <td class="py-3 pr-4"><span class="px-2 py-1 rounded text-[9px] font-black uppercase ${badgeTipo}">${v.tipo}</span></td>
+                    <td class="py-3 text-xs">${gpsLink}</td>
+                </tr>
+            `;
+
+            if (fSol === HOY_SERVER) {
+                htmlHoy += rowHtml;
+                countHoy++;
+            } else {
+                if(!historialAgrupado[fSol]) historialAgrupado[fSol] = {rows: '', count: 0};
+                historialAgrupado[fSol].rows += rowHtml;
+                historialAgrupado[fSol].count++;
+            }
+        });
+
+        document.getElementById('rep-titulo-hoy').innerHTML = `Registros de Hoy <span class="ml-2 bg-white text-emerald-700 px-2 py-0.5 rounded-full text-[10px]">${countHoy}</span>`;
+        document.getElementById('rep-bitacora-hoy').innerHTML = htmlHoy || '<tr><td colspan="7" class="text-center py-4 text-slate-400 text-xs italic">Nadie ha registrado interacciones hoy.</td></tr>';
+
+        let htmlAcordeon = '';
+        Object.keys(historialAgrupado).sort((a,b) => {
+            let partsA = a.split('/'); let dateA = new Date(partsA[2], partsA[1]-1, partsA[0]);
+            let partsB = b.split('/'); let dateB = new Date(partsB[2], partsB[1]-1, partsB[0]);
+            return dateB - dateA;
+        }).forEach(fechaGroup => {
+            const groupData = historialAgrupado[fechaGroup];
+            htmlAcordeon += `
+                <details class="mb-4 bg-white border border-slate-200 rounded-2xl overflow-hidden group shadow-sm">
+                    <summary class="cursor-pointer bg-slate-50 px-5 py-4 font-black text-xs text-slate-700 flex justify-between items-center outline-none select-none hover:bg-slate-100 transition-colors">
+                        <span class="flex items-center gap-3"><span class="text-lg">🗓️</span> ${fechaGroup} <span class="ml-2 bg-white text-slate-500 px-2 py-0.5 rounded-full text-[10px]">${groupData.count}</span></span>
+                        <span class="text-slate-400 group-open:rotate-180 transition-transform">▼</span>
+                    </summary>
+                    <div class="overflow-x-auto p-4 border-t border-slate-100 bg-white">
+                        <table class="w-full text-left text-xs whitespace-nowrap">
+                            <tbody class="text-slate-700 font-medium divide-y divide-slate-100">${groupData.rows}</tbody>
+                        </table>
+                    </div>
+                </details>
+            `;
+        });
+        document.getElementById('rep-bitacora-hist').innerHTML = htmlAcordeon || '<p class="text-xs text-slate-400 italic">No hay historial anterior en este mes.</p>';
+
+        let clientesRiesgo = DATA.filter(c => (vend === "" || c.vend === vend) && c.enRiesgo === true && c.clase === 'A');
+        document.getElementById('radar-fugas-count').innerText = `${clientesRiesgo.length} Alertas`;
+        
+        let htmlRiesgo = '';
+        if(clientesRiesgo.length === 0) {
+            htmlRiesgo = '<div class="text-center py-4 text-emerald-500 font-bold text-xs">✅ Todo en orden. No hay VIPs con $0 compras este año.</div>';
+        } else {
+            clientesRiesgo.forEach(c => {
+                let nomLimpio = c.nombre.replace(/'/g, "");
+                htmlRiesgo += `
+                    <div class="flex justify-between items-center p-3 bg-rose-50 rounded-xl border border-rose-100">
+                        <div>
+                            <span class="font-mono text-[9px] font-black text-rose-500 mr-2">${c.codigo}</span>
+                            <span class="text-xs font-black text-slate-800">${c.nombre}</span>
+                        </div>
+                        <button onclick="openM('${c.codigo}', '${nomLimpio}')" class="bg-white border border-rose-200 text-rose-600 text-[10px] font-black px-3 py-1 rounded-lg shadow-sm hover:bg-rose-600 hover:text-white transition">Analizar Fuga</button>
+                    </div>
+                `;
+            });
+        }
+        document.getElementById('rep-riesgo-lista').innerHTML = htmlRiesgo;
+    }
+  </script>
+</body>
+</html>
