@@ -854,6 +854,19 @@
       </div>
   </div>
 
+  <!-- Desglose de puntos por vendedor (drill-down del admin) -->
+  <div id="modal-desglose" class="modal opacity-0 pointer-events-none fixed inset-0 flex items-center justify-center z-[210] p-4 bg-slate-900/80 backdrop-blur-md">
+      <div class="bg-white rounded-[30px] shadow-2xl w-full max-w-2xl max-h-[88vh] overflow-y-auto p-6 md:p-8 scale-95 transition-transform">
+          <div class="flex items-center justify-between mb-1">
+              <h3 id="desg-titulo" class="text-xl font-black text-slate-800">Desglose de puntos</h3>
+              <button onclick="cerrarDesglose()" class="text-slate-400 hover:text-slate-700 text-2xl font-black leading-none">&times;</button>
+          </div>
+          <p id="desg-sub" class="text-[11px] text-slate-400 mb-4">—</p>
+          <div id="desg-kpis" class="grid grid-cols-3 gap-2 mb-5"></div>
+          <div id="desg-contenido" class="text-center text-xs text-slate-400 py-6 animate-pulse">Cargando…</div>
+      </div>
+  </div>
+
   <script>
     let DATA = [];
     let DATA_FILTRADA = []; 
@@ -1179,8 +1192,8 @@
             let pct = a.metas.puntos>0 ? Math.round((a.hoy.puntos/a.metas.puntos)*100) : 0;
             let cumplido = a.metas.puntos>0 && a.hoy.puntos>=a.metas.puntos;
             let col = cumplido?'text-emerald-600':(pct>=50?'text-amber-500':'text-rose-500');
-            return '<tr class="border-b border-slate-100">'
-                + '<td class="py-2 px-2 font-bold text-slate-700 text-xs">'+a.alias+'</td>'
+            return '<tr class="border-b border-slate-100 cursor-pointer hover:bg-blue-50 transition-colors" onclick="abrirDesglose(\''+a.email+'\')" title="Ver desglose de puntos">'
+                + '<td class="py-2 px-2 font-bold text-slate-700 text-xs">'+a.alias+' <span class="text-[9px] text-blue-400">›</span></td>'
                 + '<td class="py-2 px-2 text-center font-black '+col+' text-xs">'+a.hoy.puntos+' / '+a.metas.puntos+' <span class="text-[9px]">('+pct+'%)</span></td>'
                 + '<td class="py-2 px-2 text-center text-xs text-slate-600">'+a.hoy.llamadas+(a.metas.llamadas>0?(' / '+a.metas.llamadas):'')+'</td>'
                 + '<td class="py-2 px-2 text-center text-xs text-slate-600">'+a.hoy.whatsapp+(a.metas.whatsapp>0?(' / '+a.metas.whatsapp):'')+'</td>'
@@ -1191,7 +1204,7 @@
             + '<thead><tr class="text-[9px] text-slate-400 uppercase tracking-widest border-b border-slate-200">'
             + '<th class="py-2 px-2">Asesor</th><th class="py-2 px-2 text-center">Puntos</th><th class="py-2 px-2 text-center">Llam.</th><th class="py-2 px-2 text-center">WA</th><th class="py-2 px-2 text-center">Visitas</th></tr></thead>'
             + '<tbody>'+filas+'</tbody></table>'
-            + '<p class="text-[9px] text-slate-400 mt-3">Edita las metas en la hoja <b>METAS_USUARIO</b>. "—" = sin meta definida.</p></div>';
+            + '<p class="text-[9px] text-slate-400 mt-3">Toca un vendedor para ver el desglose de sus puntos. Edita las metas en <b>METAS_USUARIO</b> o con el botón ⚙️ Ajustar metas.</p></div>';
     }
 
     function actualizarDashboard() {
@@ -2917,6 +2930,54 @@
                 estadoCliente: (document.getElementById('con-estado').value || '').trim()
             } : null
         }, usuarioLogueado);
+    }
+
+    // ===== Drill-down: desglose de puntos por vendedor (admin) =====
+    function abrirDesglose(email) {
+        const m = document.getElementById('modal-desglose');
+        m.classList.remove('opacity-0', 'pointer-events-none');
+        m.children[0].classList.remove('scale-95');
+        document.getElementById('desg-kpis').innerHTML = '';
+        document.getElementById('desg-contenido').innerHTML = '<p class="text-center text-xs text-slate-400 py-6 animate-pulse">Cargando…</p>';
+        const fecha = FECHA_ADMIN_SEL ? yyyymmddToDdmmyyyy(FECHA_ADMIN_SEL) : null;
+        google.script.run.withSuccessHandler(function(res){
+            if(!res || !res.exito){ document.getElementById('desg-contenido').innerHTML = '<p class="text-center text-xs text-rose-400 py-6">No se pudo cargar.</p>'; return; }
+            renderDesglose(res);
+        }).withFailureHandler(function(){ document.getElementById('desg-contenido').innerHTML = '<p class="text-center text-xs text-rose-400 py-6">Error de red.</p>'; })
+          .obtenerDesglosePuntosDia(email, fecha);
+    }
+
+    function cerrarDesglose() {
+        const m = document.getElementById('modal-desglose');
+        m.classList.add('opacity-0', 'pointer-events-none');
+        m.children[0].classList.add('scale-95');
+    }
+
+    function renderDesglose(d) {
+        document.getElementById('desg-titulo').innerText = d.alias;
+        document.getElementById('desg-sub').innerText = 'Desglose del ' + d.fecha + ' · meta diaria ' + d.metaPuntos + ' pts';
+        function kpi(label, val, color){ return '<div class="bg-slate-50 border border-slate-200 rounded-2xl p-3 text-center"><p class="text-lg font-black '+color+' leading-none">'+val+'</p><p class="text-[8px] font-black text-slate-400 uppercase tracking-widest mt-1">'+label+'</p></div>'; }
+        const pctDia = d.metaPuntos>0 ? Math.round((d.totalPuntos/d.metaPuntos)*100) : 0;
+        document.getElementById('desg-kpis').innerHTML =
+            kpi('Puntos del día ('+pctDia+'%)', d.totalPuntos, 'text-blue-600')
+          + kpi('Semana', d.puntosSemana, 'text-indigo-600')
+          + kpi('Mes', d.puntosMes, 'text-emerald-600');
+
+        let resumen = d.resumen.length ? ('<table class="w-full text-left mb-5"><thead><tr class="text-[9px] text-slate-400 uppercase tracking-widest border-b border-slate-200"><th class="py-2">Resultado</th><th class="py-2 text-center">Veces</th><th class="py-2 text-center">c/u</th><th class="py-2 text-right">Subtotal</th></tr></thead><tbody>'
+            + d.resumen.map(function(r){ return '<tr class="border-b border-slate-100"><td class="py-2 text-xs font-bold text-slate-700">'+r.resultado+'</td><td class="py-2 text-center text-xs">'+r.veces+'</td><td class="py-2 text-center text-xs text-slate-400">'+r.puntosCadaUno+'</td><td class="py-2 text-right text-xs font-black text-slate-800">'+r.subtotal+'</td></tr>'; }).join('')
+            + '<tr><td class="py-2 text-xs font-black" colspan="3">TOTAL DÍA</td><td class="py-2 text-right text-sm font-black text-blue-600">'+d.totalPuntos+'</td></tr>'
+            + '</tbody></table>') : '';
+
+        let detalle = d.filas.length ? ('<p class="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-2">Detalle ('+d.totalInteracciones+' interacciones)</p><div class="max-h-72 overflow-y-auto">'
+            + d.filas.map(function(f){
+                let c = f.puntos>=3?'text-emerald-600':(f.puntos>0?'text-blue-600':'text-slate-300');
+                return '<div class="flex items-center justify-between border-b border-slate-100 py-1.5">'
+                    + '<div class="min-w-0"><span class="text-[11px] font-bold text-slate-700">'+f.hora+' · '+f.cod+'</span><span class="text-[10px] text-slate-400 block truncate">'+f.tipo+' → '+f.resultado+'</span></div>'
+                    + '<span class="text-xs font-black '+c+' ml-2 whitespace-nowrap">'+f.puntos+' pts</span>'
+                    + '</div>';
+            }).join('') + '</div>') : '<p class="text-center text-xs text-slate-400 py-4">Sin interacciones ese día.</p>';
+
+        document.getElementById('desg-contenido').innerHTML = resumen + detalle;
     }
 
     // ===== FASE 2: modal de admin para editar metas =====

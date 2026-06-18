@@ -422,6 +422,64 @@ function inicializarFase2() {
   return { exito: true };
 }
 
+// Desglose de los puntos de UN vendedor en UN día: resumen por resultado + detalle cronológico.
+// Para el drill-down del admin (clic en un vendedor del panel de rendimiento).
+function obtenerDesglosePuntosDia(email, fechaStrOpcional) {
+  try {
+    const em = String(email || '').trim().toLowerCase();
+    if (!em) return { exito: false, mensaje: 'Email vacío' };
+    const fecha = fechaStrOpcional || Utilities.formatDate(new Date(), "GMT-6", "dd/MM/yyyy");
+    const alias = getAliasMap();
+    const metas = obtenerMetasUsuario(em);
+    const ctx = _refContexto(fecha);
+    const ss = SpreadsheetApp.openById(SHEET_ID_CRM);
+    const h = ss.getSheetByName('VISITAS');
+    const filas = [], porResultado = {};
+    let total = 0, ptsSemana = 0, ptsMes = 0;
+    if (h && h.getLastRow() > 1) {
+      const data = h.getDataRange().getValues();
+      for (let i = 1; i < data.length; i++) {
+        if (String(data[i][1] || '').trim().toLowerCase() !== em) continue;
+        let fVal = data[i][0];
+        let fStr = (fVal instanceof Date) ? Utilities.formatDate(fVal, "GMT-6", "dd/MM/yyyy HH:mm") : String(fVal).trim();
+        let pts = parseFloat(data[i][8]); if (isNaN(pts)) pts = 0;
+        // Acumulados de semana y mes (respecto a la fecha seleccionada).
+        let rd = _fechaVisitaADate(fVal);
+        if (rd) {
+          let t = rd.getTime();
+          if (t >= ctx.weekStart.getTime() && t <= ctx.weekEnd.getTime()) ptsSemana += pts;
+          if (t >= ctx.monthStart.getTime() && t <= ctx.monthEnd.getTime()) ptsMes += pts;
+        }
+        if (fStr.substring(0, 10) !== fecha) continue;
+        let resultado = String(data[i][7] || '').trim() || '(sin resultado)';
+        filas.push({ hora: fStr.substring(11, 16), cod: String(data[i][2] || '').replace(/'/g, ''), cliente: String(data[i][3] || '').trim(), tipo: String(data[i][4] || '').trim(), resultado: resultado, puntos: pts });
+        if (!porResultado[resultado]) porResultado[resultado] = { veces: 0, puntosUnit: pts, subtotal: 0 };
+        porResultado[resultado].veces++;
+        porResultado[resultado].subtotal += pts;
+        total += pts;
+      }
+    }
+    filas.sort(function(a, b){ return a.hora.localeCompare(b.hora); });
+    const resumen = Object.keys(porResultado).map(function(k){
+      return { resultado: k, veces: porResultado[k].veces, puntosCadaUno: porResultado[k].puntosUnit, subtotal: Math.round(porResultado[k].subtotal * 100) / 100 };
+    }).sort(function(a, b){ return b.subtotal - a.subtotal; });
+    return {
+      exito: true,
+      alias: alias[em] || em.split('@')[0],
+      fecha: fecha,
+      metaPuntos: metas.puntos,
+      totalInteracciones: filas.length,
+      totalPuntos: Math.round(total * 100) / 100,
+      puntosSemana: Math.round(ptsSemana * 100) / 100,
+      puntosMes: Math.round(ptsMes * 100) / 100,
+      resumen: resumen,
+      filas: filas
+    };
+  } catch (e) {
+    return { exito: false, mensaje: e.message };
+  }
+}
+
 function doGet(e) {
   let html = HtmlService.createTemplateFromFile('Index').evaluate();
   html.setTitle('CRM Ventas CDES');
