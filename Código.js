@@ -1,6 +1,168 @@
 // --- IDs DE TUS DOS BASES DE DATOS ---
-const SHEET_ID_VENTAS = '184yrmB_4BRtVWKAvGYNC3Y3qNsoN0x6DSKLme0kfdXw'; 
+const SHEET_ID_VENTAS = '184yrmB_4BRtVWKAvGYNC3Y3qNsoN0x6DSKLme0kfdXw';
 const SHEET_ID_CRM = '14WJaC8VkcYAXIiO65Q9DDXh9RXhdUSg8120_L9mG9YY';
+
+// ============================================================
+// FASE 1 - SISTEMA DE PUNTOS POR RESULTADO
+// Columnas nuevas en VISITAS (al final, no rompen indices viejos):
+//   H (idx 7) = Resultado | I (idx 8) = Puntos | J (idx 9) = Origen_Puntaje
+// La configuracion de puntos vive en la hoja CONFIG_PUNTOS (editable por gerencia).
+// ============================================================
+const RESULTADOS_DEFAULT = [
+  ['Pedido / venta cerrada', 3],
+  ['Cotización / oportunidad abierta', 2],
+  ['Pedido pendiente de confirmar', 2],
+  ['Contacto efectivo con respuesta', 1],
+  ['Cliente completo / no necesita', 1],
+  ['Producto no disponible (sin stock)', 1],
+  ['Mensaje enviado sin respuesta', 0.25],
+  ['No se obtuvo contacto', 0]
+];
+// Resultados que NO implican contacto real con el cliente (no marcan "contactado").
+const RESULTADOS_SIN_CONTACTO = ['No se obtuvo contacto'];
+
+function obtenerHojaConfigPuntos() {
+  const ss = SpreadsheetApp.openById(SHEET_ID_CRM);
+  let h = ss.getSheetByName('CONFIG_PUNTOS');
+  if (!h) {
+    h = ss.insertSheet('CONFIG_PUNTOS');
+    h.appendRow(['Resultado', 'Puntos']);
+    RESULTADOS_DEFAULT.forEach(function(r) { h.appendRow(r); });
+    h.setFrozenRows(1);
+    h.getRange(1, 1, 1, 2).setFontWeight('bold');
+    h.setColumnWidth(1, 280);
+  }
+  return h;
+}
+
+function obtenerConfigPuntos() {
+  const h = obtenerHojaConfigPuntos();
+  const data = h.getDataRange().getValues();
+  const map = {};
+  for (let i = 1; i < data.length; i++) {
+    const res = String(data[i][0]).trim();
+    if (!res) continue;
+    let pts = parseFloat(String(data[i][1]).replace(',', '.'));
+    map[res] = isNaN(pts) ? 0 : pts;
+  }
+  return map;
+}
+
+// Devuelve la lista de resultados (en orden) para poblar el desplegable del formulario.
+function obtenerResultadosDisponibles() {
+  try {
+    const h = obtenerHojaConfigPuntos();
+    const data = h.getDataRange().getValues();
+    const lista = [];
+    for (let i = 1; i < data.length; i++) {
+      const res = String(data[i][0]).trim();
+      if (!res) continue;
+      let pts = parseFloat(String(data[i][1]).replace(',', '.'));
+      lista.push({ resultado: res, puntos: isNaN(pts) ? 0 : pts });
+    }
+    return { exito: true, resultados: lista };
+  } catch (e) {
+    return { exito: false, mensaje: e.message, resultados: RESULTADOS_DEFAULT.map(function(r){ return {resultado:r[0], puntos:r[1]}; }) };
+  }
+}
+
+function calcularPuntos(resultado, mapOpcional) {
+  const map = mapOpcional || obtenerConfigPuntos();
+  const r = String(resultado || '').trim();
+  return map.hasOwnProperty(r) ? map[r] : 0;
+}
+
+// Asegura los encabezados de las columnas nuevas en VISITAS (idempotente).
+function inicializarColumnasVisitas() {
+  const ss = SpreadsheetApp.openById(SHEET_ID_CRM);
+  const h = ss.getSheetByName('VISITAS');
+  if (!h) return { exito: false, mensaje: 'No existe la hoja VISITAS' };
+  if (!String(h.getRange(1, 8).getValue()).trim()) h.getRange(1, 8).setValue('Resultado');
+  if (!String(h.getRange(1, 9).getValue()).trim()) h.getRange(1, 9).setValue('Puntos');
+  if (!String(h.getRange(1, 10).getValue()).trim()) h.getRange(1, 10).setValue('Origen_Puntaje');
+  return { exito: true };
+}
+
+// Setup de la Fase 1: crea CONFIG_PUNTOS y prepara columnas. Correr UNA vez (admin).
+function inicializarFase1() {
+  obtenerHojaConfigPuntos();
+  return inicializarColumnasVisitas();
+}
+
+// Suma de puntos del dia para un vendedor (o de todo el equipo si email es null).
+function contarPuntosHoy(emailFiltro, fechaStrOpcional) {
+  const ss = SpreadsheetApp.openById(SHEET_ID_CRM);
+  const h = ss.getSheetByName('VISITAS');
+  if (!h || h.getLastRow() <= 1) return 0;
+  const fechaObjetivo = fechaStrOpcional || Utilities.formatDate(new Date(), "GMT-6", "dd/MM/yyyy");
+  const data = h.getDataRange().getValues();
+  const emailLower = emailFiltro ? String(emailFiltro).trim().toLowerCase() : null;
+  let suma = 0;
+  for (let i = 1; i < data.length; i++) {
+    let fVal = data[i][0];
+    let fStr = (fVal instanceof Date)
+      ? Utilities.formatDate(fVal, "GMT-6", "dd/MM/yyyy")
+      : String(fVal).trim().substring(0, 10);
+    if (fStr !== fechaObjetivo) continue;
+    if (emailLower && String(data[i][1]).trim().toLowerCase() !== emailLower) continue;
+    let p = parseFloat(data[i][8]);
+    if (!isNaN(p)) suma += p;
+  }
+  return Math.round(suma * 100) / 100;
+}
+
+// Infiere un resultado a partir del tipo y el texto de la nota (para migracion historica).
+function inferirResultado(tipo, notaLower) {
+  if (String(tipo).trim() === 'No se obtuvo respuesta por llamada') return 'No se obtuvo contacto';
+  const n = String(notaLower || '').toLowerCase();
+  const tiene = function(arr) { return arr.some(function(k) { return n.indexOf(k) >= 0; }); };
+  if (!n.trim()) {
+    return (String(tipo).trim() === 'Contacto WhatsApp') ? 'Mensaje enviado sin respuesta' : 'No se obtuvo contacto';
+  }
+  if (tiene(['no contesta','no respond','no contesto','no contestó','buzon','buzón','apagado','no se logro','no se logró','no localiz','sin respuesta'])) return 'No se obtuvo contacto';
+  if (tiene(['realizo pedido','realizó pedido','hizo pedido','pedido realizado','coloco pedido','colocó pedido','factur','compro','compró','venta cerrada','pedido por','se vendio','se vendió'])) return 'Pedido / venta cerrada';
+  if (tiene(['pendiente de confirmar','por confirmar','confirmar pedido','queda pendiente','pendiente confirmacion','pendiente confirmación'])) return 'Pedido pendiente de confirmar';
+  if (tiene(['cotiz','presupuesto','oportunidad','interesad','paso precio','pasó precio','enviar precio','envio precio','envió precio','envie precio'])) return 'Cotización / oportunidad abierta';
+  if (tiene(['no tenemos','sin stock','no hay','agotado','no disponible','sin existencia','no contamos','fuera de stock'])) return 'Producto no disponible (sin stock)';
+  if (tiene(['completo','no necesita','abastecid','surtido','no requiere','por el momento no','tiene producto','bien abastecido'])) return 'Cliente completo / no necesita';
+  return 'Contacto efectivo con respuesta';
+}
+
+// MIGRACION HISTORICA - correr UNA sola vez (admin). Solo rellena filas SIN resultado.
+// Marca el origen como 'inferido'. No toca filas ya clasificadas. Reversible (no borra nada).
+function migrarResultadosHistoricos() {
+  const ss = SpreadsheetApp.openById(SHEET_ID_CRM);
+  const h = ss.getSheetByName('VISITAS');
+  if (!h || h.getLastRow() <= 1) return { exito: false, mensaje: 'VISITAS vacía' };
+  inicializarColumnasVisitas();
+  const map = obtenerConfigPuntos();
+  const data = h.getDataRange().getValues();
+  const n = data.length - 1;
+  const resCol = [], ptsCol = [], oriCol = [];
+  let inferidas = 0, yaTenian = 0;
+  const conteoPorResultado = {};
+  for (let i = 1; i < data.length; i++) {
+    let resActual = String(data[i][7] || '').trim();
+    if (resActual) {
+      resCol.push([data[i][7]]); ptsCol.push([data[i][8]]); oriCol.push([data[i][9] || 'manual']);
+      yaTenian++;
+      continue;
+    }
+    let tipo = String(data[i][4] || '').trim();
+    let nota = String(data[i][5] || '');
+    let resultado = inferirResultado(tipo, nota);
+    let pts = calcularPuntos(resultado, map);
+    resCol.push([resultado]); ptsCol.push([pts]); oriCol.push(['inferido']);
+    inferidas++;
+    conteoPorResultado[resultado] = (conteoPorResultado[resultado] || 0) + 1;
+  }
+  if (resCol.length > 0) {
+    h.getRange(2, 8, resCol.length, 1).setValues(resCol);
+    h.getRange(2, 9, ptsCol.length, 1).setValues(ptsCol);
+    h.getRange(2, 10, oriCol.length, 1).setValues(oriCol);
+  }
+  return { exito: true, totalFilas: n, inferidas: inferidas, yaClasificadas: yaTenian, desglose: conteoPorResultado };
+}
 
 function doGet(e) {
   let html = HtmlService.createTemplateFromFile('Index').evaluate();
@@ -766,10 +928,14 @@ function obtenerMisClientes() {
         let fVal = visitas[i][0];
         let cod = String(visitas[i][2] || "").trim().replace(/'/g, "");
         let tipoInt = String(visitas[i][4] || "").trim();
-        
+        let resInt = String(visitas[i][7] || "").trim(); // col H = Resultado (Fase 1)
+
         if(!cod) continue;
 
-        if (tipoInt === 'No se obtuvo respuesta por llamada') {
+        // "No contacto" se reconoce por el tipo viejo O por el Resultado nuevo (C1 opción 2).
+        let esNoContacto = (tipoInt === 'No se obtuvo respuesta por llamada') || (resInt === 'No se obtuvo contacto');
+
+        if (esNoContacto) {
             noRespuestaCount[cod] = (noRespuestaCount[cod] || 0) + 1;
         } else {
             let mesVisita = -1, anioVisita = -1;
@@ -1306,10 +1472,21 @@ function analizarTopClientesProd(codArticuloTarget) {
 function guardarVisita(d, correoVendedor) {
   const ss = SpreadsheetApp.openById(SHEET_ID_CRM);
   let h = ss.getSheetByName('VISITAS') || ss.insertSheet('VISITAS');
-  if(h.getLastRow() === 0) h.appendRow(['Fecha','Vendedor','Código','Cliente','Tipo de Interacción','Nota', 'Ubicación GPS']);
-  h.appendRow([Utilities.formatDate(new Date(), "GMT-6", "dd/MM/yyyy HH:mm"), correoVendedor || 'Desconocido', d.codigo, d.nombre, d.tipoInteraccion, d.comentario, d.gps || "N/A"]);
+  if(h.getLastRow() === 0) h.appendRow(['Fecha','Vendedor','Código','Cliente','Tipo de Interacción','Nota', 'Ubicación GPS','Resultado','Puntos','Origen_Puntaje']);
+
+  const resultado = String(d.resultado || '').trim();
+  const puntos = calcularPuntos(resultado);
+
+  h.appendRow([
+    Utilities.formatDate(new Date(), "GMT-6", "dd/MM/yyyy HH:mm"),
+    correoVendedor || 'Desconocido',
+    d.codigo, d.nombre, d.tipoInteraccion, d.comentario, d.gps || "N/A",
+    resultado, puntos, 'manual'
+  ]);
+
   const atendidosHoy = contarClientesUnicosHoy(correoVendedor);
-  return { exito: true, atendidosHoy: atendidosHoy };
+  const puntosHoy = contarPuntosHoy(correoVendedor);
+  return { exito: true, atendidosHoy: atendidosHoy, puntosHoy: puntosHoy, puntosRegistro: puntos };
 }
 
 function obtenerReportesAdmin() {
