@@ -3634,9 +3634,11 @@
         }
         cont.innerHTML = t.map(function(x){
             let detalle = [];
-            if(x.telNuevo) detalle.push('Tel → <b>'+x.telNuevo+'</b>'+(x.telActual?(' (antes '+x.telActual+')'):''));
-            if(x.estadoCliente) detalle.push('Estado: <b>'+x.estadoCliente+'</b>');
-            if(x.validado) detalle.push('Registrado: '+x.validado);
+            if(x.telNuevo) detalle.push(x.telActual
+                ? 'cambia de <b>'+x.telActual+'</b> a <b class="text-emerald-700">'+x.telNuevo+'</b>'
+                : 'teléfono nuevo: <b class="text-emerald-700">'+x.telNuevo+'</b>');
+            if(x.estadoCliente) detalle.push('estado: <b>'+x.estadoCliente+'</b>');
+            if(x.validado && !x.telNuevo) detalle.push('número registrado: <b>'+x.validado.toLowerCase()+'</b>');
             let bordeCls = x.esHoy ? 'border-l-4 border-l-amber-400 bg-amber-50 px-3 -mx-3' : 'border-b border-slate-100';
             let badge = x.esHoy ? '<span class="ml-2 text-[8px] font-black bg-amber-500 text-white px-2 py-0.5 rounded-full uppercase tracking-widest">NUEVA</span>' : '';
             return '<div class="' + bordeCls + ' py-2 mb-1">'
