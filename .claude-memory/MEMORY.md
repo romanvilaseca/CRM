@@ -1,0 +1,7 @@
+- [Features actuales del CRM](project_features_actuales.md) — sistema de puntos, cockpits día/mes, banner urgencia, badge clientes atendidos, Prioridad/Mantener/Activar (estado 2026-06-18, v123 en prod)
+- [Horario laboral SV](project_horario_laboral.md) — lun-vie 8AM-5PM, sáb 8AM-12:30PM, dom descanso. Zona horaria forzada con `Intl.DateTimeFormat` + UTC-6 sin DST
+- [Flujo de deploy a producción](project_deploy_flow.md) — push + create-version + update-deployment; iframe en corpodent.net/crm apunta a deploy fijo (@123)
+- [IDs Apps Script y planillas](reference_clasp_scriptid.md) — scriptId, deployments, URLs públicas y sheet IDs
+- [clasp run no funciona](reference_clasp_run_no_funciona.md) — workaround B (disparador temporal en doGet + curl); usar prod no dev (dev pide auth)
+- [Preferencias UI del usuario](feedback_ui_preferences.md) — horas AM/PM, tono sutil, simetría de KPIs, itera rápido, "lo manual hazlo tu" = workaround B
+- [GitHub y branch principal](reference_github_repo.md) — repo en github.com/romanvilaseca/CRM, rama `main` (NO master), local debe trackear origin/main
