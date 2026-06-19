@@ -1691,6 +1691,30 @@ function obtenerDetalleCliente(cod) {
     }
 
     let aliasMap = getAliasMap();
+
+    // Corrección de teléfono pendiente de aplicar en SAP: el número nuevo vive en
+    // CORRECCIONES_CONTACTO (cola de tareas), no en CLIENTES_ASIGNADOS. Lo mostramos
+    // en la ficha junto al número anterior. Tomamos la corrección pendiente más reciente.
+    try {
+      const hCorr = ssCRM.getSheetByName('CORRECCIONES_CONTACTO');
+      if (hCorr && hCorr.getLastRow() > 1) {
+        const dCorr = hCorr.getDataRange().getValues();
+        for (let k = 1; k < dCorr.length; k++) {
+          if (String(dCorr[k][2]).trim().replace(/'/g, "") !== codLimpio) continue;
+          const telNuevo = _normalizarTelefonoSV(dCorr[k][5]);
+          if (!telNuevo) continue;
+          const estadoSync = String(dCorr[k][9] || '').trim();
+          if (estadoSync && estadoSync !== 'Pendiente revisión') continue; // ya aplicada en SAP
+          const fVal = dCorr[k][0];
+          const emailC = String(dCorr[k][1]).trim().toLowerCase();
+          contacto.telCorregido = telNuevo;
+          contacto.telAnterior = String(dCorr[k][4] || '').trim();
+          contacto.telCorregidoFecha = (fVal instanceof Date) ? Utilities.formatDate(fVal, "GMT-6", "dd/MM/yyyy HH:mm") : String(fVal).trim();
+          contacto.telCorregidoPor = aliasMap[emailC] || (emailC ? emailC.split('@')[0] : '');
+        }
+      }
+    } catch (eCorr) { /* la ficha no debe fallar por esto */ }
+
     let historialCRM = [];
     let hojaVisitas = ssCRM.getSheetByName('VISITAS');
     if (hojaVisitas) {

@@ -782,6 +782,11 @@
                   <p class="text-[9px] font-black text-slate-400 uppercase mb-1">📞 Teléfonos</p>
                   <p id="mTel1" class="text-sm font-black text-slate-800">--</p>
                   <p id="mTel2" class="text-sm font-black text-slate-800">--</p>
+                  <div id="mTelCorregido" class="hidden w-full mt-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2 text-left">
+                      <p class="text-[9px] font-black text-amber-700 uppercase tracking-widest leading-tight">✏️ Teléfono corregido</p>
+                      <p class="text-sm font-black text-amber-800 leading-tight" id="mTelCorregidoNum">--</p>
+                      <p class="text-[8px] font-bold text-amber-600 leading-tight mt-0.5" id="mTelCorregidoMeta">pendiente de aplicar en SAP</p>
+                  </div>
                   <button onclick="toggleCorreccionFicha()" class="mt-2 text-[9px] font-black text-rose-600 uppercase tracking-widest hover:text-rose-800 hover:bg-rose-50 px-3 py-1 rounded-full transition-all">📞 Corregir teléfono</button>
                   <div id="bloque-correccion-ficha" class="hidden w-full mt-3 text-left">
                       <input id="fic-telalt" type="tel" inputmode="numeric" class="w-full p-2.5 bg-white rounded-xl text-xs border border-rose-200 outline-none focus:ring-2 focus:ring-rose-400 mb-2" placeholder="Teléfono correcto (8 dígitos)">
@@ -3039,6 +3044,7 @@
         document.getElementById('mDep').innerText = '--';
         document.getElementById('mTel1').innerText = '--';
         document.getElementById('mTel2').innerText = '--';
+        document.getElementById('mTelCorregido').classList.add('hidden');
         document.getElementById('mVend').innerText = '--';
         document.getElementById('mAnios').innerHTML = '';
         document.getElementById('mCrecimiento').innerHTML = '';
@@ -3066,6 +3072,19 @@
                 document.getElementById('mTel1').innerText = res.contacto.tel1;
                 document.getElementById('mTel2').innerText = res.contacto.tel2;
                 document.getElementById('mVend').innerText = res.contacto.vend;
+
+                // Teléfono corregido pendiente de aplicar en SAP (si existe): mostrar anterior + nuevo
+                const telCorrBox = document.getElementById('mTelCorregido');
+                if (res.contacto.telCorregido) {
+                    document.getElementById('mTelCorregidoNum').innerText = res.contacto.telCorregido;
+                    let meta = 'pendiente de aplicar en SAP';
+                    if (res.contacto.telCorregidoPor) meta += ' · ' + res.contacto.telCorregidoPor;
+                    if (res.contacto.telCorregidoFecha) meta += ' · ' + res.contacto.telCorregidoFecha;
+                    document.getElementById('mTelCorregidoMeta').innerText = meta;
+                    telCorrBox.classList.remove('hidden');
+                } else {
+                    telCorrBox.classList.add('hidden');
+                }
 
                 if(res.anios.length > 0) {
                     document.getElementById('mAnios').innerHTML = res.anios.map(a => `<div class="flex justify-between border-b border-slate-200 pb-1"><span>${a.a}</span><span class="text-slate-800 font-black">$${a.v.toLocaleString('en-US',{minimumFractionDigits:2, maximumFractionDigits:2})}</span></div>`).join('');
