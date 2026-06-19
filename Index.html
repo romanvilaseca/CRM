@@ -632,6 +632,29 @@
                 <div id="pdf-resultado" class="mt-4 hidden"></div>
             </div>
 
+            <div class="bg-white p-6 rounded-[30px] border border-slate-200 shadow-sm mb-8">
+                <div class="flex items-center gap-3 mb-2">
+                    <span class="text-2xl">📉</span>
+                    <div>
+                        <h3 class="text-lg font-black text-slate-800 leading-none">Clientes inactivos por vendedor</h3>
+                        <p class="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Compraron el año pasado y nada en los últimos 6 meses</p>
+                    </div>
+                </div>
+                <p class="text-[10px] text-slate-400 mb-4">El PDF trae el comparativo mes a mes de los últimos 12 meses, resaltando el mes actual vs el mismo mes del año pasado. Incluye quién lo emitió, fecha y hora.</p>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div class="md:col-span-2">
+                        <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1">Vendedor (cartera)</p>
+                        <select id="inact-vendedor" class="w-full p-4 rounded-2xl bg-slate-50 border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 font-bold text-sm text-slate-700">
+                            <option value="">Selecciona un vendedor…</option>
+                        </select>
+                    </div>
+                    <div class="flex items-end">
+                        <button onclick="generarInactivosPDF()" id="btn-inact-pdf" class="w-full bg-rose-600 hover:bg-rose-700 text-white py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-md transition-all active:scale-95">📄 Generar PDF</button>
+                    </div>
+                </div>
+                <div id="inact-resultado" class="mt-4 hidden"></div>
+            </div>
+
             <div id="bloque-estado-conexion" class="bg-white p-6 rounded-[30px] border border-slate-200 shadow-sm mb-8">
                 <div class="flex items-center gap-3 mb-6">
                     <span class="text-2xl">🟢</span>
@@ -726,6 +749,8 @@
                                         <th class="py-3 pr-4">Cliente</th>
                                         <th class="py-3 pr-4">Acuerdo / Nota</th>
                                         <th class="py-3 pr-4">Tipo</th>
+                                        <th class="py-3 pr-4">Resultado (paso 2)</th>
+                                        <th class="py-3 pr-4">Pts</th>
                                         <th class="py-3">GPS</th>
                                     </tr>
                                 </thead>
@@ -790,7 +815,9 @@
                   <p id="mTelHistorico" class="hidden w-full mt-1 text-[9px] font-bold text-slate-400 text-center">📜 Anterior: <span id="mTelHistoricoNum"></span></p>
                   <button onclick="toggleCorreccionFicha()" class="mt-2 text-[9px] font-black text-rose-600 uppercase tracking-widest hover:text-rose-800 hover:bg-rose-50 px-3 py-1 rounded-full transition-all">📞 Corregir teléfono</button>
                   <div id="bloque-correccion-ficha" class="hidden w-full mt-3 text-left">
-                      <input id="fic-telalt" type="tel" inputmode="numeric" class="w-full p-2.5 bg-white rounded-xl text-xs border border-rose-200 outline-none focus:ring-2 focus:ring-rose-400 mb-2" placeholder="Teléfono correcto (8 dígitos)">
+                      <input id="fic-telalt" type="tel" inputmode="numeric" class="w-full p-2.5 bg-white rounded-xl text-xs border border-rose-200 outline-none focus:ring-2 focus:ring-rose-400 mb-2" placeholder="Teléfono principal correcto (8 dígitos)">
+                      <input id="fic-telalt2" type="tel" inputmode="numeric" class="w-full p-2.5 bg-white rounded-xl text-xs border border-rose-200 outline-none focus:ring-2 focus:ring-rose-400 mb-1" placeholder="Teléfono adicional, fijo o celular (opcional)">
+                      <p class="text-[8px] text-slate-400 mb-2 leading-tight">El principal corrige el número del cliente. El adicional queda como nota para que SAP lo agregue.</p>
                       <button id="btn-fic-guardar" onclick="guardarCorreccionFicha()" class="w-full bg-rose-600 text-white py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-rose-700 active:scale-95 transition-all">Guardar corrección para SAP</button>
                   </div>
               </div>
@@ -2272,6 +2299,21 @@
                 selectVend.classList.add('opacity-70', 'cursor-not-allowed');
             }
 
+            // Selector del reporte de clientes inactivos (admin): nombres de cartera.
+            const selInact = document.getElementById('inact-vendedor');
+            if (selInact) {
+                const actual = selInact.value;
+                selInact.innerHTML = '<option value="">Selecciona un vendedor…</option>';
+                unicos.forEach(v => {
+                    if (v && v !== "SIN VENDEDOR ASIGNADO") {
+                        const op = document.createElement('option');
+                        op.value = v; op.text = v;
+                        selInact.appendChild(op);
+                    }
+                });
+                if (actual) selInact.value = actual;
+            }
+
             detenerAnimacionProgreso();
             switchTab('tareas'); // Llevar a las tareas por defecto
 
@@ -3274,16 +3316,29 @@
         const esNoContacto = (resultado === "No se obtuvo contacto") || (tipo === "No se obtuvo respuesta por llamada");
 
         google.script.run.withSuccessHandler((res) => {
+            btn.innerText = "✅ GUARDAR INTERACCIÓN"; btn.disabled = false;
 
-            let ptsTxt = (res && typeof res.puntosRegistro === 'number') ? (' (+' + res.puntosRegistro + ' pts)') : '';
-            let bonoTxt = (res && res.puntoCorreccion) ? (" Además ganaste +" + res.puntoCorreccion + " punto por corregir el teléfono.") : "";
-            if (esNoContacto) {
-                alert("Registro guardado" + ptsTxt + "." + bonoTxt + " El cliente seguirá apareciendo pendiente en la ruta.");
-            } else {
-                alert("Interacción registrada" + ptsTxt + ". El cliente ha pasado a color verde ✅");
+            // El paso 2 es obligatorio en el backend: si falta el resultado, no se guarda.
+            if (res && res.exito === false) {
+                alert(res.mensaje || "No se pudo guardar. Selecciona el resultado de la interacción (paso 2).");
+                return;
             }
 
-            btn.innerText = "✅ GUARDAR INTERACCIÓN"; btn.disabled = false;
+            // Alerta de puntos: lo que se sumó + score del día y del mes.
+            const ganados = ((res && typeof res.puntosRegistro === 'number') ? res.puntosRegistro : 0)
+                          + ((res && res.puntoCorreccion) ? res.puntoCorreccion : 0);
+            const hoyTxt = (res && typeof res.puntosHoy === 'number') ? res.puntosHoy : '?';
+            const mesTxt = (res && typeof res.puntosMes === 'number') ? res.puntosMes : '?';
+            let msg = "Se sumaron +" + ganados + " pts a tu score.\n"
+                    + "Hoy: " + hoyTxt + " pts    ·    Mes: " + mesTxt + " pts";
+            if (res && res.puntoCorreccion) {
+                msg += "\n(Incluye +" + res.puntoCorreccion + " por corregir el teléfono.)";
+            }
+            msg += esNoContacto
+                ? "\n\nEl cliente seguirá pendiente en la ruta."
+                : "\n\nEl cliente pasó a verde ✅";
+            alert(msg);
+
             document.getElementById('nota').value = "";
             ['dem-producto','dem-marca','dem-cantidad','con-telalt','con-validado','con-estado'].forEach(function(id){
                 var el = document.getElementById(id); if (el) el.value = "";
@@ -3650,8 +3705,8 @@
             return;
         }
         // Separar: tareas con número nuevo (cambio de teléfono) vs. solo reporte de estado/incorrecto.
-        const conNumero = t.filter(function(x){ return x.telNuevo; });
-        const soloReporte = t.filter(function(x){ return !x.telNuevo; });
+        const conNumero = t.filter(function(x){ return x.telNuevo || x.telAdicional; });
+        const soloReporte = t.filter(function(x){ return !x.telNuevo && !x.telAdicional; });
 
         let html = '';
         if (conNumero.length) {
@@ -3670,13 +3725,16 @@
         if(x.telNuevo) detalle.push(x.telActual
             ? 'cambia de <b>'+x.telActual+'</b> a <b class="text-emerald-700">'+x.telNuevo+'</b>'
             : 'teléfono nuevo: <b class="text-emerald-700">'+x.telNuevo+'</b>');
+        if(x.telAdicional) detalle.push('agregar adicional (fijo/celular): <b class="text-blue-700">'+x.telAdicional+'</b>');
         if(x.estadoCliente) detalle.push('estado: <b>'+x.estadoCliente+'</b>');
         if(x.validado && !x.telNuevo) detalle.push('número registrado: <b>'+x.validado.toLowerCase()+'</b>');
         let bordeCls = x.esHoy ? 'border-l-4 border-l-amber-400 bg-amber-50 px-3 -mx-3' : 'border-b border-slate-100';
         let badge = x.esHoy ? '<span class="ml-2 text-[8px] font-black bg-amber-500 text-white px-2 py-0.5 rounded-full uppercase tracking-widest">NUEVA</span>' : '';
         let accion = x.telNuevo
             ? '<button onclick="aplicarTareaSAP(\''+x.codigo+'\',\''+x.telNuevo+'\')" class="mt-1 text-[9px] font-black text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-3 py-1 rounded-full uppercase tracking-widest transition-all active:scale-95">✅ Marcar aplicada</button>'
-            : '';
+            : (x.telAdicional
+                ? '<button onclick="marcarTareaListaSAP('+x.fila+')" class="mt-1 text-[9px] font-black text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1 rounded-full uppercase tracking-widest transition-all active:scale-95">✅ Marcar lista</button>'
+                : '');
         return '<div class="' + bordeCls + ' py-2 mb-1">'
             + '<p class="font-bold text-slate-700">'+x.codigo+' · '+x.cliente + badge + '</p>'
             + '<p class="text-slate-500 text-[11px]">'+detalle.join(' · ')+'</p>'
@@ -3696,6 +3754,39 @@
             }
         }).withFailureHandler(function(){ alert('Error de red al aplicar la corrección.'); })
           .aplicarCorreccionTelefono(codigo, telNuevo, usuarioLogueado);
+    }
+
+    // Sella una tarea de solo-adicional (o reporte) como lista, sin tocar la cartera.
+    function marcarTareaListaSAP(fila) {
+        if (!confirm('¿Marcar esta tarea como lista?\n\nÚsalo cuando ya agregaste el teléfono adicional en SAP.')) return;
+        google.script.run.withSuccessHandler(function(res){
+            if (res && res.exito) { alert('Tarea marcada como lista.'); cargarTareasSAP(); }
+            else { alert((res && res.mensaje) ? res.mensaje : 'No se pudo marcar la tarea.'); }
+        }).withFailureHandler(function(){ alert('Error de red.'); })
+          .sellarTareaSAP(fila, usuarioLogueado);
+    }
+
+    function generarInactivosPDF() {
+        const vend = document.getElementById('inact-vendedor').value;
+        const cont = document.getElementById('inact-resultado');
+        if (!vend) { alert('Selecciona un vendedor.'); return; }
+        const btn = document.getElementById('btn-inact-pdf');
+        btn.disabled = true; btn.innerText = '⏳ GENERANDO...';
+        cont.classList.remove('hidden');
+        cont.innerHTML = '<div class="bg-slate-50 border border-slate-200 text-slate-500 p-4 rounded-2xl text-xs font-bold text-center animate-pulse">Procesando ventas y armando el PDF…</div>';
+        google.script.run.withSuccessHandler(function(res){
+            btn.disabled = false; btn.innerText = '📄 Generar PDF';
+            if (res && res.exito) {
+                cont.innerHTML = '<div class="bg-emerald-50 border border-emerald-200 p-4 rounded-2xl text-xs text-emerald-800 text-center">'
+                    + '<p class="font-black mb-2">PDF listo · ' + res.clientes + ' clientes inactivos</p>'
+                    + '<a href="' + res.url + '" target="_blank" class="inline-block bg-emerald-600 text-white px-5 py-2 rounded-full font-black uppercase tracking-widest hover:bg-emerald-700">Abrir PDF</a></div>';
+            } else {
+                cont.innerHTML = '<div class="bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-2xl text-xs font-bold text-center">' + ((res && res.mensaje) ? res.mensaje : 'No se pudo generar el PDF.') + '</div>';
+            }
+        }).withFailureHandler(function(err){
+            btn.disabled = false; btn.innerText = '📄 Generar PDF';
+            cont.innerHTML = '<div class="bg-rose-50 border border-rose-200 text-rose-700 p-4 rounded-2xl text-xs font-bold text-center">Error: ' + err.message + '</div>';
+        }).generarInactivosPorVendedorPDF(vend, usuarioLogueado);
     }
 
     function actualizarBadgeAuditoria(count) {
@@ -3775,18 +3866,26 @@
         const nom = document.getElementById('mNom').innerText;
         const telActual = document.getElementById('mTel1').innerText;
         const telAlt = (document.getElementById('fic-telalt').value || '').trim();
+        const telAlt2 = (document.getElementById('fic-telalt2').value || '').trim();
 
-        if (!telAlt) { alert("Escribe el teléfono correcto (8 dígitos)."); return; }
-        const telNum = telAlt.replace(/[^0-9]/g, '').replace(/^503/, '');
-        if (telNum.length !== 8) { alert("El teléfono correcto debe tener 8 dígitos (El Salvador)."); return; }
+        if (!telAlt && !telAlt2) { alert("Escribe al menos un teléfono (principal o adicional)."); return; }
+        if (telAlt) {
+            const n1 = telAlt.replace(/[^0-9]/g, '').replace(/^503/, '');
+            if (n1.length !== 8) { alert("El teléfono principal debe tener 8 dígitos (El Salvador)."); return; }
+        }
+        if (telAlt2) {
+            const n2 = telAlt2.replace(/[^0-9]/g, '').replace(/^503/, '');
+            if (n2.length !== 8) { alert("El teléfono adicional debe tener 8 dígitos (fijo o celular)."); return; }
+        }
 
         btn.innerText = "GUARDANDO..."; btn.disabled = true;
         google.script.run.withSuccessHandler(function(res){
             btn.innerText = "Guardar corrección para SAP"; btn.disabled = false;
             if (res && res.exito) {
-                const bono = (res && res.puntoCorreccion) ? (" Ganaste +" + res.puntoCorreccion + " punto por corregir el teléfono.") : "";
-                alert("✅ Corrección registrada. Quedó como tarea pendiente para SAP." + bono);
+                const bono = (res && res.puntoCorreccion) ? (" Ganaste +" + res.puntoCorreccion + " punto por aportar el teléfono.") : "";
+                alert("Corrección registrada. Quedó como tarea pendiente para SAP." + bono);
                 document.getElementById('fic-telalt').value = "";
+                document.getElementById('fic-telalt2').value = "";
                 toggleCorreccionFicha();
                 if (res.puntoCorreccion && typeof cargarCockpit === 'function') { cargarCockpit(); cargarUltimaInteraccion(); }
             } else {
@@ -3797,7 +3896,8 @@
             alert("Error de red al guardar la corrección.");
         }).guardarCorreccionContacto({
             codigo: cod, nombre: nom, telActual: telActual,
-            telAlternativo: telAlt, validado: 'Incorrecto', estadoCliente: '',
+            telAlternativo: telAlt, telAlternativo2: telAlt2,
+            validado: telAlt ? 'Incorrecto' : '', estadoCliente: '',
             notas: 'Corrección desde ficha de cliente'
         }, usuarioLogueado);
     }
@@ -4046,6 +4146,8 @@
                     <td class="py-3 pr-4 text-xs font-bold text-slate-800 truncate max-w-[150px]" title="${v.nom}"><span class="block text-[9px] text-slate-400 font-mono mb-0.5">${v.cod}</span>${v.nom}</td>
                     <td class="py-3 pr-4 text-[10px] text-slate-600 truncate max-w-[200px]" title="${v.nota}">${v.nota || '---'}</td>
                     <td class="py-3 pr-4"><span class="px-2 py-1 rounded text-[9px] font-black uppercase ${badgeTipo}">${v.tipo}</span></td>
+                    <td class="py-3 pr-4 text-[10px] text-slate-600 truncate max-w-[160px]" title="${v.resultado || ''}">${v.resultado || '—'}${v.origen === 'inferido' ? ' <span class="text-[8px] text-amber-500 font-black">(auto, no cuenta)</span>' : ''}</td>
+                    <td class="py-3 pr-4 text-[10px] font-black ${(v.puntos > 0) ? 'text-blue-600' : 'text-slate-300'}">${(typeof v.puntos === 'number') ? ('+' + v.puntos) : ''}</td>
                     <td class="py-3 text-xs">${gpsLink}</td>
                 </tr>
             `;
@@ -4061,7 +4163,7 @@
         });
 
         document.getElementById('rep-titulo-hoy').innerHTML = `Registros de Hoy <span class="ml-2 bg-white text-emerald-700 px-2 py-0.5 rounded-full text-[10px]">${countHoy}</span>`;
-        document.getElementById('rep-bitacora-hoy').innerHTML = htmlHoy || '<tr><td colspan="7" class="text-center py-4 text-slate-400 text-xs italic">Nadie ha registrado interacciones hoy.</td></tr>';
+        document.getElementById('rep-bitacora-hoy').innerHTML = htmlHoy || '<tr><td colspan="9" class="text-center py-4 text-slate-400 text-xs italic">Nadie ha registrado interacciones hoy.</td></tr>';
 
         let htmlAcordeon = '';
         Object.keys(historialAgrupado).sort((a,b) => {

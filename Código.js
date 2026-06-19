@@ -129,6 +129,16 @@ function inicializarFase1() {
   return inicializarColumnasVisitas();
 }
 
+// Puntos que SÍ cuentan al score: solo los del paso 2 (origen 'manual') y el bono
+// de corrección de teléfono ('correccion'). Los 'inferido' (adivinador histórico)
+// valen 0: el paso 2 es la única forma de obtener puntos. No borra nada de la hoja,
+// solo deja de sumarlos. Col 8 = Puntos, col 9 = Origen_Puntaje.
+function _puntosValidos(row) {
+  if (String(row[9] || '').trim().toLowerCase() === 'inferido') return 0;
+  const p = parseFloat(row[8]);
+  return isNaN(p) ? 0 : p;
+}
+
 // Suma de puntos del dia para un vendedor (o de todo el equipo si email es null).
 function contarPuntosMes(emailFiltro, yyyymmOpcional) {
   const ss = SpreadsheetApp.openById(SHEET_ID_CRM);
@@ -154,8 +164,7 @@ function contarPuntosMes(emailFiltro, yyyymmOpcional) {
     }
     if (y !== targetYear || m !== targetMonth) continue;
     if (emailLower && String(data[i][1]).trim().toLowerCase() !== emailLower) continue;
-    let p = parseFloat(data[i][8]);
-    if (!isNaN(p)) suma += p;
+    suma += _puntosValidos(data[i]);
   }
   return Math.round(suma * 100) / 100;
 }
@@ -211,8 +220,7 @@ function contarPuntosHoy(emailFiltro, fechaStrOpcional) {
       : String(fVal).trim().substring(0, 10);
     if (fStr !== fechaObjetivo) continue;
     if (emailLower && String(data[i][1]).trim().toLowerCase() !== emailLower) continue;
-    let p = parseFloat(data[i][8]);
-    if (!isNaN(p)) suma += p;
+    suma += _puntosValidos(data[i]);
   }
   return Math.round(suma * 100) / 100;
 }
@@ -462,7 +470,7 @@ function obtenerRendimientoUsuario(emailUsuario, fechaStrOpcional) {
         const rd = _fechaVisitaADate(data[i][0]);
         if (!rd) continue;
         const tipo = String(data[i][4] || '').trim();
-        const pts = parseFloat(data[i][8]) || 0;
+        const pts = _puntosValidos(data[i]);
         const t = rd.getTime();
         if (t === ctx.ref.getTime()) _acumular(hoy, tipo, pts);
         if (t >= ctx.weekStart.getTime() && t <= ctx.weekEnd.getTime()) _acumular(semana, tipo, pts);
@@ -506,7 +514,7 @@ function obtenerRendimientoEquipo(fechaStrOpcional) {
         if (!asesores[email]) continue;
         const rd = _fechaVisitaADate(data[i][0]);
         if (!rd || rd.getTime() !== ctx.ref.getTime()) continue;
-        _acumular(asesores[email].hoy, String(data[i][4] || '').trim(), parseFloat(data[i][8]) || 0);
+        _acumular(asesores[email].hoy, String(data[i][4] || '').trim(), _puntosValidos(data[i]));
       }
     }
     const lista = orden.map(function(em){ const a = asesores[em]; a.hoy.puntos = Math.round(a.hoy.puntos * 100) / 100; return a; });
@@ -548,7 +556,7 @@ function obtenerDesglosePuntosDia(email, fechaStrOpcional) {
         if (String(data[i][1] || '').trim().toLowerCase() !== em) continue;
         let fVal = data[i][0];
         let fStr = (fVal instanceof Date) ? Utilities.formatDate(fVal, "GMT-6", "dd/MM/yyyy HH:mm") : String(fVal).trim();
-        let pts = parseFloat(data[i][8]); if (isNaN(pts)) pts = 0;
+        let pts = _puntosValidos(data[i]);
         // Acumulados de semana y mes (respecto a la fecha seleccionada).
         let rd = _fechaVisitaADate(fVal);
         if (rd) {
@@ -613,7 +621,7 @@ function generarDesglosePuntosPDF(email, iniYYYYMMDD, finYYYYMMDD) {
         const rd = _fechaVisitaADate(data[i][0]);
         if (!rd) continue;
         if (rd.getTime() < iniDay.getTime() || rd.getTime() > finDay.getTime()) continue;
-        let pts = parseFloat(data[i][8]); if (isNaN(pts)) pts = 0;
+        let pts = _puntosValidos(data[i]);
         let resultado = String(data[i][7] || '').trim() || '(sin resultado)';
         let diaStr = Utilities.formatDate(rd, "GMT-6", "dd/MM/yyyy");
         if (!porResultado[resultado]) porResultado[resultado] = { veces: 0, unit: pts, sub: 0 };
@@ -668,6 +676,183 @@ function generarDesglosePuntosPDF(email, iniYYYYMMDD, finYYYYMMDD) {
     const archivo = carpeta.createFile(pdf);
     archivo.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
     return { exito: true, url: archivo.getUrl(), nombre: nombreArch, totalPuntos: Math.round(total * 100) / 100, interacciones: inter };
+  } catch (e) {
+    return { exito: false, mensaje: e.message };
+  }
+}
+
+// Convierte el valor de "Fecha Contab." (formato mixto) a Date: acepta Date,
+// número de serie de Sheets (ej. 45705) y texto dd/MM/yyyy o dd/MM/yy.
+function _fechaVentaADate(v) {
+  if (v instanceof Date) return v;
+  let serial = null;
+  if (typeof v === 'number' && v > 30000) serial = v;
+  else if (typeof v === 'string' && /^\d+(\.\d+)?$/.test(v.trim()) && parseFloat(v) > 30000) serial = parseFloat(v);
+  if (serial !== null) {
+    // Serial de Sheets: día 0 = 1899-12-30. +12h para no cruzar de día por el huso GMT-6.
+    return new Date(Date.UTC(1899, 11, 30) + Math.round(serial) * 86400000 + 12 * 3600000);
+  }
+  const s = String(v || '').trim();
+  if (!s) return null;
+  const p = s.split(' ')[0].split('/');
+  if (p.length >= 3) {
+    let d = parseInt(p[0], 10), mo = parseInt(p[1], 10), y = parseInt(p[2].substring(0, 4), 10);
+    if (p[2].trim().length === 2) y = 2000 + parseInt(p[2], 10);
+    if (d >= 1 && mo >= 1 && mo <= 12 && y > 1900) return new Date(y, mo - 1, d);
+  }
+  const t = new Date(s);
+  return isNaN(t.getTime()) ? null : t;
+}
+
+function _fmtMonto(n) {
+  const r = Math.round(Number(n) || 0);
+  return r.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+
+// ADMIN: PDF de clientes de un vendedor (por nombre de cartera) que compraron el año
+// pasado y NADA en los últimos 6 meses, con el comparativo mensual de los últimos 12
+// meses + el mismo mes del año pasado. correoAdmin = quien lo emite (va en el PDF).
+function generarInactivosPorVendedorPDF(vendedorNombre, correoAdmin) {
+  try {
+    const vendUp = String(vendedorNombre || '').trim().toUpperCase();
+    if (!vendUp) return { exito: false, mensaje: 'Selecciona un vendedor.' };
+
+    // 1) Clientes de ese vendedor en la cartera.
+    const ss = SpreadsheetApp.openById(SHEET_ID_CRM);
+    const dCli = ss.getSheets()[0].getDataRange().getValues();
+    const clientes = {};
+    for (let i = 1; i < dCli.length; i++) {
+      const cod = String(dCli[i][1] || '').trim().replace(/'/g, '');
+      if (!cod) continue;
+      if (String(dCli[i][8] || '').trim().toUpperCase() !== vendUp) continue;
+      clientes[cod] = { codigo: cod, nombre: String(dCli[i][2] || '').trim() };
+    }
+    const cods = Object.keys(clientes);
+    if (!cods.length) return { exito: false, mensaje: 'Ese vendedor no tiene clientes en la cartera.' };
+
+    // 2) Ventana: de enero del año pasado al mes actual (así "Total año pasado" cuadra
+    //    con lo que muestra la tira y se ven todos los meses de 2025).
+    const hoy = new Date();
+    const anioPasado = hoy.getFullYear() - 1;
+    const MES_ES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+    const meses = [];
+    let dIter = new Date(anioPasado, 0, 1);
+    const finVentana = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    while (dIter.getTime() <= finVentana.getTime()) {
+      meses.push({ y: dIter.getFullYear(), m: dIter.getMonth() + 1, key: dIter.getFullYear() + '-' + (dIter.getMonth() + 1), label: MES_ES[dIter.getMonth()] + '-' + String(dIter.getFullYear()).slice(2) });
+      dIter = new Date(dIter.getFullYear(), dIter.getMonth() + 1, 1);
+    }
+    // Índices para resaltar el comparativo: mismo mes del año pasado vs mes actual.
+    const idxMesAP = hoy.getMonth();          // ene año pasado = 0, así que el mes actual del año pasado cae aquí
+    const idxMesAct = meses.length - 1;       // mes actual (último)
+    const cut6 = new Date(hoy.getFullYear(), hoy.getMonth() - 6, hoy.getDate());
+
+    // 3) Recorrer ventas y acumular por cliente.
+    const ssV = SpreadsheetApp.openById(SHEET_ID_VENTAS);
+    const ventas = ssV.getSheets()[0].getDataRange().getValues();
+    const Hh = ventas[0].map(function(h){ return String(h).toLowerCase().trim(); });
+    const iCod = Hh.findIndex(function(x){ return x === 'código cliente' || x.indexOf('código clien') >= 0 || x.indexOf('codigo') >= 0; });
+    const iTot = Hh.findIndex(function(x){ return x.indexOf('total línea') >= 0 || x.indexOf('total linea') >= 0 || x.indexOf('total') >= 0; });
+    const iFec = Hh.findIndex(function(x){ return x === 'fecha contab.' || x.indexOf('fecha') >= 0; });
+    const iCan = Hh.findIndex(function(x){ return x === 'cancelada' || x === 'estado doc.'; });
+    if (iCod === -1 || iTot === -1 || iFec === -1) return { exito: false, mensaje: 'No se reconocieron las columnas de la hoja de ventas.' };
+
+    const acc = {};
+    cods.forEach(function(c){ acc[c] = { mensual: {}, totalAP: 0, last6: 0 }; });
+    for (let i = 1; i < ventas.length; i++) {
+      const cod = String(ventas[i][iCod] || '').trim().replace(/'/g, '');
+      if (!acc[cod]) continue;
+      if (iCan !== -1) { const e = String(ventas[i][iCan] || '').trim().toUpperCase(); if (e === 'CANCELADA' || e === 'C' || e === 'CANCELADO') continue; }
+      const fecha = _fechaVentaADate(ventas[i][iFec]);
+      if (!fecha) continue;
+      const monto = parseFloat(String(ventas[i][iTot] || '0').replace(/,/g, '').replace(/[^0-9.-]+/g, '')) || 0;
+      const pc = acc[cod];
+      if (fecha.getFullYear() === anioPasado) pc.totalAP += monto;
+      if (fecha.getTime() >= cut6.getTime()) pc.last6 += monto;
+      const key = fecha.getFullYear() + '-' + (fecha.getMonth() + 1);
+      pc.mensual[key] = (pc.mensual[key] || 0) + monto;
+    }
+
+    // 4) Filtrar: compró el año pasado (>0) y CERO en los últimos 6 meses.
+    const lista = [];
+    cods.forEach(function(c){
+      const pc = acc[c];
+      if (pc.totalAP > 0 && pc.last6 <= 0) {
+        lista.push({
+          codigo: c, nombre: clientes[c].nombre,
+          totalAP: pc.totalAP,
+          mensual: meses.map(function(mm){ return pc.mensual[mm.key] || 0; })
+        });
+      }
+    });
+    if (!lista.length) return { exito: false, mensaje: 'Ese vendedor no tiene clientes que compraran en ' + anioPasado + ' y se hayan inactivado los últimos 6 meses.' };
+    lista.sort(function(a, b){ return b.totalAP - a.totalAP; });
+
+    // 5) Totales y comparativo mes actual vs mismo mes del año pasado.
+    const totalAPgrupo = lista.reduce(function(s, x){ return s + x.totalAP; }, 0);
+    const sumMesAP = lista.reduce(function(s, x){ return s + x.mensual[idxMesAP]; }, 0);   // mismo mes, año pasado
+    const sumMesAct = lista.reduce(function(s, x){ return s + x.mensual[idxMesAct]; }, 0); // mes actual
+    const varPct = sumMesAP > 0 ? Math.round(((sumMesAct - sumMesAP) / sumMesAP) * 100) : 0;
+
+    // 6) Armar PDF (horizontal).
+    const adminAlias = getAliasMap()[String(correoAdmin || '').trim().toLowerCase()] || (String(correoAdmin || '').split('@')[0] || 'admin');
+    const emision = Utilities.formatDate(new Date(), "GMT-6", "dd/MM/yyyy HH:mm");
+    const thMeses = meses.map(function(mm, idx){
+      const hl = (idx === idxMesAP || idx === idxMesAct) ? ' style="background:#1d4ed8;"' : '';
+      return '<th' + hl + '>' + mm.label + '</th>';
+    }).join('');
+    const filas = lista.map(function(x, n){
+      const celdas = x.mensual.map(function(v, idx){
+        const esComp = (idx === idxMesAP || idx === idxMesAct);
+        const bg = esComp ? 'background:#eff6ff;' : '';
+        if (v > 0) {
+          return '<td style="text-align:right;' + bg + (esComp ? 'font-weight:900;' : '') + '">$' + _fmtMonto(v) + '</td>';
+        }
+        // Mes sin compra: en rojo.
+        return '<td style="text-align:right;color:#dc2626;' + bg + '">$0</td>';
+      }).join('');
+      return '<tr><td style="text-align:center;color:#94a3b8;">' + (n + 1) + '</td>'
+        + '<td style="font-family:monospace;">' + x.codigo + '</td>'
+        + '<td>' + x.nombre + '</td>'
+        + celdas
+        + '<td style="text-align:right;font-weight:900;background:#f1f5f9;">$' + _fmtMonto(x.totalAP) + '</td></tr>';
+    }).join('');
+
+    const mesActualLabel = meses[idxMesAct].label, mesAPLabel = meses[idxMesAP].label;
+    const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><style>'
+      + '@page { size: A4 landscape; margin: 12mm; }'
+      + 'body{font-family:Arial,sans-serif;color:#0f172a;font-size:9px;}'
+      + 'h1{font-size:18px;margin:0 0 2px 0;} .sub{color:#64748b;font-size:10px;text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin:0 0 2px 0;}'
+      + '.emis{color:#94a3b8;font-size:9px;margin:0 0 12px 0;}'
+      + '.kpis{display:flex;gap:8px;margin-bottom:12px;} .kpi{background:#0f172a;color:#fff;border-radius:10px;padding:8px 12px;flex:1;text-align:center;}'
+      + '.kpi b{font-size:15px;display:block;} .kpi span{font-size:7px;letter-spacing:1px;text-transform:uppercase;color:#94a3b8;}'
+      + 'table{width:100%;border-collapse:collapse;font-size:7px;table-layout:fixed;} th{background:#1e293b;color:#fff;padding:3px 2px;text-align:center;font-size:6px;text-transform:uppercase;}'
+      + 'td{padding:2px 3px;border-bottom:1px solid #e2e8f0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;} .footer{margin-top:14px;font-size:8px;color:#94a3b8;text-align:center;text-transform:uppercase;letter-spacing:1.5px;}'
+      + '</style></head><body>'
+      + '<h1>Clientes inactivos &mdash; ' + vendedorNombre + '</h1>'
+      + '<p class="sub">Compraron en ' + anioPasado + ' y $0 en los últimos 6 meses &middot; montos sin IVA</p>'
+      + '<p class="emis">Emitido por ' + adminAlias + ' &middot; ' + emision + '</p>'
+      + '<div class="kpis">'
+      + '<div class="kpi"><b>' + lista.length + '</b><span>Clientes inactivos</span></div>'
+      + '<div class="kpi"><b>$' + _fmtMonto(totalAPgrupo) + '</b><span>Compraron en ' + anioPasado + '</span></div>'
+      + '<div class="kpi"><b>$' + _fmtMonto(sumMesAP) + '</b><span>' + mesAPLabel + ' (año pasado)</span></div>'
+      + '<div class="kpi"><b>$' + _fmtMonto(sumMesAct) + ' (' + varPct + '%)</b><span>' + mesActualLabel + ' (mes actual)</span></div>'
+      + '</div>'
+      + '<table>'
+      + '<colgroup><col style="width:2.5%"><col style="width:5.5%"><col style="width:17%">'
+      + meses.map(function(){ return '<col style="width:' + (70 / meses.length).toFixed(2) + '%">'; }).join('')
+      + '<col style="width:5%"></colgroup>'
+      + '<thead><tr><th>#</th><th>Código</th><th style="text-align:left;">Cliente</th>' + thMeses + '<th>Total ' + anioPasado + '</th></tr></thead><tbody>'
+      + filas + '</tbody></table>'
+      + '<p class="footer">Emitido por ' + adminAlias + ' &middot; ' + emision + ' &middot; CRM CDES (columnas azules: mismo mes año pasado vs mes actual)</p>'
+      + '</body></html>';
+
+    const pdf = Utilities.newBlob(html, 'text/html', 'inactivos.html').getAs('application/pdf');
+    const nombreArch = 'Inactivos ' + vendedorNombre + ' ' + Utilities.formatDate(new Date(), "GMT-6", "yyyy-MM-dd HHmm") + '.pdf';
+    pdf.setName(nombreArch);
+    const archivo = obtenerCarpetaInformes().createFile(pdf);
+    archivo.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+    return { exito: true, url: archivo.getUrl(), nombre: nombreArch, clientes: lista.length, totalAnioPasado: Math.round(totalAPgrupo) };
   } catch (e) {
     return { exito: false, mensaje: e.message };
   }
@@ -874,8 +1059,7 @@ function obtenerCockpitsEquipo(fechaStrOpcional) {
         if (fStr !== fechaObjetivo) continue;
         let emailFila = String(vData[i][1]).trim().toLowerCase();
         if (idx[emailFila] === undefined) continue;
-        let p = parseFloat(vData[i][8]);
-        if (!isNaN(p)) asesores[idx[emailFila]].atendidos += p;
+        asesores[idx[emailFila]].atendidos += _puntosValidos(vData[i]);
       }
       asesores.forEach(function(a){ a.atendidos = Math.round(a.atendidos * 100) / 100; });
     }
@@ -2107,6 +2291,10 @@ function guardarVisita(d, correoVendedor) {
   if(h.getLastRow() === 0) h.appendRow(['Fecha','Vendedor','Código','Cliente','Tipo de Interacción','Nota', 'Ubicación GPS','Resultado','Puntos','Origen_Puntaje']);
 
   const resultado = String(d.resultado || '').trim();
+  // Paso 2 obligatorio: el resultado es la ÚNICA forma de obtener puntos. Sin él no se guarda.
+  if (!resultado) {
+    return { exito: false, mensaje: 'Debes seleccionar el resultado de la interacción (paso 2).' };
+  }
   const puntos = calcularPuntos(resultado);
 
   h.appendRow([
@@ -2146,13 +2334,16 @@ function guardarVisita(d, correoVendedor) {
 
   const atendidosHoy = contarClientesUnicosHoy(correoVendedor);
   const puntosHoy = contarPuntosHoy(correoVendedor);
-  return { exito: true, atendidosHoy: atendidosHoy, puntosHoy: puntosHoy, puntosRegistro: puntos, puntoCorreccion: puntoCorreccion };
+  const puntosMes = contarPuntosMes(correoVendedor);
+  return { exito: true, atendidosHoy: atendidosHoy, puntosHoy: puntosHoy, puntosMes: puntosMes, puntosRegistro: puntos, puntoCorreccion: puntoCorreccion };
 }
 
 // ============================================================
 // FASE 3 - CORRECCIÓN DE CONTACTO (staging para SAP / OCRD)
 // ============================================================
-const CORRECCIONES_HEADERS = ['Fecha', 'Vendedor', 'Código cliente', 'Cliente', 'Teléfono registrado actual', 'Teléfono alternativo propuesto', '¿Validado correcto?', 'Estado del cliente', 'Notas', 'Estado de sincronización'];
+// Col 11 (índice 10) = teléfono adicional. Se agrega al FINAL para no correr los
+// índices que usan las funciones de aplicar/autocierre (estadoSync sigue en col 10).
+const CORRECCIONES_HEADERS = ['Fecha', 'Vendedor', 'Código cliente', 'Cliente', 'Teléfono registrado actual', 'Teléfono alternativo propuesto', '¿Validado correcto?', 'Estado del cliente', 'Notas', 'Estado de sincronización', 'Teléfono adicional (fijo/celular)'];
 
 function obtenerHojaCorrecciones() {
   const ss = SpreadsheetApp.openById(SHEET_ID_CRM);
@@ -2163,6 +2354,9 @@ function obtenerHojaCorrecciones() {
     h.setFrozenRows(1);
     h.getRange(1, 1, 1, CORRECCIONES_HEADERS.length).setFontWeight('bold');
     h.setColumnWidth(3, 120); h.setColumnWidth(4, 220);
+  } else if (!String(h.getRange(1, 11).getValue()).trim()) {
+    // Hoja vieja sin la columna 11: agrega el encabezado.
+    h.getRange(1, 11).setValue('Teléfono adicional (fijo/celular)').setFontWeight('bold');
   }
   return h;
 }
@@ -2170,9 +2364,10 @@ function obtenerHojaCorrecciones() {
 function _correccionTieneDatos(c) {
   if (!c) return false;
   const tel = String(c.telAlternativo || '').trim();
+  const tel2 = String(c.telAlternativo2 || '').trim();
   const val = String(c.validado || '').trim();
   const est = String(c.estadoCliente || '').trim();
-  return !!(tel || val || est);
+  return !!(tel || tel2 || val || est);
 }
 
 // Valida teléfono de El Salvador: 8 dígitos (acepta +503 opcional). Devuelve "" si inválido.
@@ -2191,7 +2386,15 @@ function guardarCorreccionContacto(d, correoVendedor) {
     let telAltNorm = '';
     if (telAlt) {
       telAltNorm = _normalizarTelefonoSV(telAlt);
-      if (!telAltNorm) return { exito: false, mensaje: 'El teléfono alternativo debe tener 8 dígitos (El Salvador).' };
+      if (!telAltNorm) return { exito: false, mensaje: 'El teléfono principal debe tener 8 dígitos (El Salvador).' };
+    }
+    // Teléfono adicional (fijo o celular). Informativo: queda en la cola para que el
+    // admin lo agregue en SAP como principal o secundario. No pisa la cartera.
+    const telSec = String(d.telAlternativo2 || '').trim();
+    let telSecNorm = '';
+    if (telSec) {
+      telSecNorm = _normalizarTelefonoSV(telSec);
+      if (!telSecNorm) return { exito: false, mensaje: 'El teléfono adicional debe tener 8 dígitos (fijo o celular).' };
     }
     h.appendRow([
       Utilities.formatDate(new Date(), "GMT-6", "dd/MM/yyyy HH:mm"),
@@ -2203,14 +2406,16 @@ function guardarCorreccionContacto(d, correoVendedor) {
       String(d.validado || '').trim(),
       String(d.estadoCliente || '').trim(),
       String(d.notas || '').trim(),
-      'Pendiente revisión'
+      'Pendiente revisión',
+      telSecNorm
     ]);
-    // Premio: si aportó un teléfono nuevo válido, otorga +1 punto al asesor.
+    // Premio: una vez por cliente, por aportar un número nuevo válido (principal o adicional).
     // Se registra como una fila NEUTRAL en VISITAS (suma puntos, pero no marca al
     // cliente como contactado ni como sin-contacto; ver obtenerMisClientes).
     let puntoCorreccion = 0;
-    if (telAltNorm) {
-      puntoCorreccion = otorgarPuntoCorreccion(d.codigo, d.nombre, telAltNorm, correoVendedor);
+    const telParaBono = telAltNorm || telSecNorm;
+    if (telParaBono) {
+      puntoCorreccion = otorgarPuntoCorreccion(d.codigo, d.nombre, telParaBono, correoVendedor);
     }
     return { exito: true, puntoCorreccion: puntoCorreccion };
   } catch (e) {
@@ -2328,7 +2533,8 @@ function obtenerTareasSAP() {
         telNuevo: String(data[i][5] || ''),
         validado: String(data[i][6] || ''),
         estadoCliente: String(data[i][7] || ''),
-        notas: String(data[i][8] || '')
+        notas: String(data[i][8] || ''),
+        telAdicional: String(data[i][10] || '')
       });
     }
     tareas.sort(function(a, b) { return (b.esHoy ? 1 : 0) - (a.esHoy ? 1 : 0); });
@@ -2384,6 +2590,23 @@ function aplicarCorreccionTelefono(codigo, telNuevo, correoAdmin) {
     }
 
     return { exito: true, telViejo: telViejo, telNuevo: telNuevoNorm, marcadas: marcadas };
+  } catch (e) {
+    return { exito: false, mensaje: e.message };
+  }
+}
+
+// Sella una tarea de CORRECCIONES_CONTACTO como aplicada SIN tocar la cartera.
+// Para tareas que son solo un teléfono adicional (o un reporte), donde no hay
+// cambio de Tel1 que aplicar; el admin ya lo metió en SAP a mano.
+function sellarTareaSAP(fila, correoAdmin) {
+  try {
+    const f = parseInt(fila, 10);
+    if (!f || f < 2) return { exito: false, mensaje: 'Fila inválida.' };
+    const h = obtenerHojaCorrecciones();
+    const ahora = Utilities.formatDate(new Date(), "GMT-6", "dd/MM/yyyy HH:mm");
+    const adminAlias = (getAliasMap()[String(correoAdmin || '').trim().toLowerCase()]) || 'admin';
+    h.getRange(f, 10).setValue('Aplicada en SAP ' + ahora + ' (' + adminAlias + ')');
+    return { exito: true };
   } catch (e) {
     return { exito: false, mensaje: e.message };
   }
@@ -2620,11 +2843,14 @@ function obtenerReportesAdmin() {
 
         listaVisitas.push({
             fecha: fStr,
-            usuario: aliasMap[emailUsr] || emailUsr.split('@')[0], 
+            usuario: aliasMap[emailUsr] || emailUsr.split('@')[0],
             cod: String(vData[i][2]).trim().replace(/'/g, ""),
             nom: String(vData[i][3]).trim(),
             tipo: String(vData[i][4]).trim(),
             nota: String(vData[i][5]).trim(),
+            resultado: String(vData[i][7] || "").trim(),
+            puntos: _puntosValidos(vData[i]),
+            origen: String(vData[i][9] || "").trim().toLowerCase(),
             gps: String(vData[i][6] || "").trim()
         });
     }
