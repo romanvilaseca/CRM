@@ -33,12 +33,14 @@ Meta diaria fijada en **30 puntos** para todos (editable por vendedor). El cockp
 - `obtenerListadosAdmin` (sin contacto / en riesgo / cartera abandonada en una pasada, reusa `obtenerMisClientes`), `obtenerDemandaDetalle`, `obtenerTareasSAP`, `obtenerResumenDemanda`.
 - Metas: `obtenerMetasEquipo`, `guardarMetasUsuario`, `ajustarMetaPuntosTodos`.
 - Reincidencias: `registrarAlertaReincidencia`/`obtenerAlertasReincidencia` (hoja `ALERTAS_CONTACTO`, upsert por cliente). Tras 3+ "No se obtuvo contacto" el frontend obliga a corregir contacto; al guardar, `guardarVisita` levanta la alerta (recibe `intentosPrevios` del frontend). Panel admin "🔁 Reincidencias de contacto". No retroactivo.
+- Ponderación editable por modal: `guardarConfigPuntos(lista)` (solo actualiza columna Puntos de CONFIG_PUNTOS). Modal admin "⭐ Puntos" en panel de Rendimiento.
+- Bono por corregir teléfono: al registrar un tel nuevo válido (8 díg), `guardarCorreccionContacto` llama a `otorgarPuntoCorreccion` → fila NEUTRAL en VISITAS (tipo/resultado `Corrección de teléfono`, +1 pt, origen `correccion`). Neutral = suma puntos pero NO marca contactado ni sin-contacto (ver guarda en `obtenerMisClientes`). Constante `PUNTO_CORRECCION_CONTACTO`.
 - Setup idempotente: `inicializarFase1/2/34`, `migrarResultadosHistoricos` (backfill, marca `inferido`).
 
 ## Despliegue (IMPORTANTE)
 - `clasp run` NO funciona (proyecto usa GCP por defecto; requiere habilitar API en navegador). Ver memoria `crm-deploy-clasp-process`.
 - Para correr funciones de servidor una vez: técnica de **disparador temporal en doGet + despliegue web temporal + curl + borrar**.
-- Publicar a usuarios: `clasp create-version` → `clasp update-deployment <ID> --versionNumber N`. El deployment publicado (la URL que usan los 8) es `AKfycbzHuce-FNFVOD0Yq2vbyHbokzAELgsDRIp7zwwPbRVZWtGwBV0adgpsGas9KlaTXGwEVw` (última versión publicada **@114**). Probar antes: deployment @HEAD `AKfycby_YSlZF2UKH8fkKSjmhFaLxzmSeYQ_8SLHyUbvqGzz` (URL /dev). El sitio `www.corpodent.net/crm` carga el deployment publicado en un **iframe** (probar /dev requiere abrirlo directo, no por el iframe).
+- Publicar a usuarios: `clasp create-version` → `clasp update-deployment <ID> --versionNumber N`. El deployment publicado (la URL que usan los 8) es `AKfycbzHuce-FNFVOD0Yq2vbyHbokzAELgsDRIp7zwwPbRVZWtGwBV0adgpsGas9KlaTXGwEVw` (última versión publicada **@115**). Probar antes: deployment @HEAD `AKfycby_YSlZF2UKH8fkKSjmhFaLxzmSeYQ_8SLHyUbvqGzz` (URL /dev). El sitio `www.corpodent.net/crm` carga el deployment publicado en un **iframe** (probar /dev requiere abrirlo directo, no por el iframe).
 - Verificar en vivo: `curl .../exec?cb=<random>` (usar cache-buster; el borde de Google cachea tras redeploy).
 - GitHub: `https://github.com/romanvilaseca/CRM.git` (rama `main`). Identidad git: `Roman Vilaseca <romanvilaseca@gmail.com>`.
 

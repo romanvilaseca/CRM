@@ -21,6 +21,10 @@ const RESULTADOS_DEFAULT = [
 // Resultados que NO implican contacto real con el cliente (no marcan "contactado").
 const RESULTADOS_SIN_CONTACTO = ['No se obtuvo contacto'];
 
+// Bono fijo por corregir el teléfono de un cliente (no sale de CONFIG_PUNTOS; es un premio aparte).
+const PUNTO_CORRECCION_CONTACTO = 1;
+const RESULTADO_CORRECCION = 'Corrección de teléfono';
+
 function obtenerHojaConfigPuntos() {
   const ss = SpreadsheetApp.openById(SHEET_ID_CRM);
   let h = ss.getSheetByName('CONFIG_PUNTOS');
@@ -70,6 +74,32 @@ function calcularPuntos(resultado, mapOpcional) {
   const map = mapOpcional || obtenerConfigPuntos();
   const r = String(resultado || '').trim();
   return map.hasOwnProperty(r) ? map[r] : 0;
+}
+
+// Guarda la ponderación editada desde el modal de admin. Solo actualiza la columna Puntos
+// de los resultados existentes (no renombra ni borra). lista = [{resultado, puntos}, ...].
+function guardarConfigPuntos(lista) {
+  try {
+    if (!lista || !lista.length) return { exito: false, mensaje: 'No se recibió ninguna ponderación.' };
+    const h = obtenerHojaConfigPuntos();
+    const data = h.getDataRange().getValues();
+    let cambios = 0;
+    lista.forEach(function(item) {
+      const res = String(item.resultado || '').trim();
+      let pts = parseFloat(String(item.puntos).replace(',', '.'));
+      if (!res || isNaN(pts)) return;
+      for (let i = 1; i < data.length; i++) {
+        if (String(data[i][0]).trim() === res) {
+          h.getRange(i + 1, 2).setValue(pts);
+          cambios++;
+          break;
+        }
+      }
+    });
+    return { exito: true, cambios: cambios };
+  } catch (e) {
+    return { exito: false, mensaje: e.message };
+  }
 }
 
 // Asegura los encabezados de las columnas nuevas en VISITAS (idempotente).
@@ -1347,6 +1377,9 @@ function obtenerMisClientes() {
 
         // "No contacto" se reconoce por el tipo viejo O por el Resultado nuevo (C1 opción 2).
         let esNoContacto = (tipoInt === 'No se obtuvo respuesta por llamada') || (resInt === 'No se obtuvo contacto');
+        // La fila de bono por corregir teléfono es NEUTRAL: solo aporta puntos, no cuenta
+        // como contacto ni como intento sin respuesta.
+        if (resInt === RESULTADO_CORRECCION) continue;
 
         if (esNoContacto) {
             noRespuestaCount[cod] = (noRespuestaCount[cod] || 0) + 1;
@@ -1902,8 +1935,10 @@ function guardarVisita(d, correoVendedor) {
     guardarDemanda(d, correoVendedor);
   }
   // Fase 3: si no hubo contacto y el vendedor aportó datos de teléfono, registra la corrección.
+  // Si aportó un teléfono nuevo válido, guardarCorreccionContacto otorga +1 punto (fila aparte).
+  let puntoCorreccion = 0;
   if (resultado === 'No se obtuvo contacto' && d.correccion && _correccionTieneDatos(d.correccion)) {
-    guardarCorreccionContacto({
+    const corr = guardarCorreccionContacto({
       codigo: d.codigo, nombre: d.nombre,
       telActual: d.correccion.telActual,
       telAlternativo: d.correccion.telAlternativo,
@@ -1911,6 +1946,7 @@ function guardarVisita(d, correoVendedor) {
       estadoCliente: d.correccion.estadoCliente,
       notas: d.comentario
     }, correoVendedor);
+    if (corr && corr.puntoCorreccion) puntoCorreccion = corr.puntoCorreccion;
   }
   // Reincidencia: el cliente ya tenía 3+ intentos sin respuesta y el vendedor vuelve a marcar
   // "sin contacto". Registra/actualiza una alerta para que el admin se entere automáticamente.
@@ -1924,7 +1960,7 @@ function guardarVisita(d, correoVendedor) {
 
   const atendidosHoy = contarClientesUnicosHoy(correoVendedor);
   const puntosHoy = contarPuntosHoy(correoVendedor);
-  return { exito: true, atendidosHoy: atendidosHoy, puntosHoy: puntosHoy, puntosRegistro: puntos };
+  return { exito: true, atendidosHoy: atendidosHoy, puntosHoy: puntosHoy, puntosRegistro: puntos, puntoCorreccion: puntoCorreccion };
 }
 
 // ============================================================
@@ -1983,9 +2019,40 @@ function guardarCorreccionContacto(d, correoVendedor) {
       String(d.notas || '').trim(),
       'Pendiente revisión'
     ]);
-    return { exito: true };
+    // Premio: si aportó un teléfono nuevo válido, otorga +1 punto al asesor.
+    // Se registra como una fila NEUTRAL en VISITAS (suma puntos, pero no marca al
+    // cliente como contactado ni como sin-contacto; ver obtenerMisClientes).
+    let puntoCorreccion = 0;
+    if (telAltNorm) {
+      puntoCorreccion = otorgarPuntoCorreccion(d.codigo, d.nombre, telAltNorm, correoVendedor);
+    }
+    return { exito: true, puntoCorreccion: puntoCorreccion };
   } catch (e) {
     return { exito: false, mensaje: e.message };
+  }
+}
+
+// Escribe la fila de bono por corrección de teléfono en VISITAS. Devuelve los puntos otorgados.
+function otorgarPuntoCorreccion(codigo, nombre, telNuevo, correoVendedor) {
+  try {
+    const ss = SpreadsheetApp.openById(SHEET_ID_CRM);
+    let h = ss.getSheetByName('VISITAS') || ss.insertSheet('VISITAS');
+    if (h.getLastRow() === 0) h.appendRow(['Fecha','Vendedor','Código','Cliente','Tipo de Interacción','Nota', 'Ubicación GPS','Resultado','Puntos','Origen_Puntaje']);
+    h.appendRow([
+      Utilities.formatDate(new Date(), "GMT-6", "dd/MM/yyyy HH:mm"),
+      correoVendedor || 'Desconocido',
+      String(codigo || '').trim(),
+      String(nombre || '').trim(),
+      RESULTADO_CORRECCION,
+      'Tel. corregido: ' + telNuevo,
+      'N/A',
+      RESULTADO_CORRECCION,
+      PUNTO_CORRECCION_CONTACTO,
+      'correccion'
+    ]);
+    return PUNTO_CORRECCION_CONTACTO;
+  } catch (e) {
+    return 0;
   }
 }
 
