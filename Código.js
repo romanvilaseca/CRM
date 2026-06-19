@@ -2250,6 +2250,7 @@ function obtenerTareasSAP() {
     const h = obtenerHojaCorrecciones();
     if (h.getLastRow() <= 1) return { exito: true, tareas: [], totalHoy: 0 };
     const data = h.getDataRange().getValues();
+    const aliasMap = getAliasMap();
     const hoyStr = Utilities.formatDate(new Date(), "GMT-6", "dd/MM/yyyy");
     const tareas = [];
     let totalHoy = 0;
@@ -2260,11 +2261,12 @@ function obtenerTareasSAP() {
       let fechaFmt = (fechaRaw instanceof Date) ? Utilities.formatDate(fechaRaw, "GMT-6", "dd/MM/yyyy HH:mm") : String(fechaRaw);
       let esHoy = fechaFmt.substring(0, 10) === hoyStr;
       if (esHoy) totalHoy++;
+      let emailVend = String(data[i][1] || '').trim().toLowerCase();
       tareas.push({
         fila: i + 1,
         fecha: fechaFmt,
         esHoy: esHoy,
-        vendedor: String(data[i][1] || ''),
+        vendedor: aliasMap[emailVend] || (emailVend ? emailVend.split('@')[0] : 'Desconocido'),
         codigo: String(data[i][2] || ''),
         cliente: String(data[i][3] || ''),
         telActual: String(data[i][4] || ''),
