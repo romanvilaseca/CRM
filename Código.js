@@ -1429,7 +1429,50 @@ function finalizarCargaCSV(tipo) {
     }
   }
   if (!encontrado) hojaMeta.appendRow([parametro, fechaHoy]);
-  return { exito: true, fecha: fechaHoy };
+
+  // Tras reimportar clientes desde SAP, cerrar solas las tareas cuyo número ya quedó
+  // aplicado en SAP (el Tel del cliente ya coincide con el número pedido en la corrección).
+  let autoCerradas = 0;
+  if (tipo === 'Clientes') {
+    try { autoCerradas = reconciliarCorreccionesConSAP(); } catch (e) {}
+  }
+
+  return { exito: true, fecha: fechaHoy, autoCerradas: autoCerradas };
+}
+
+// Cierra automáticamente las correcciones pendientes cuyo número nuevo YA coincide con el
+// teléfono que el cliente tiene en la cartera (CLIENTES_ASIGNADOS) — es decir, ya se aplicó
+// en SAP y se reimportó. Las sella como "Aplicada en SAP (auto)". Devuelve cuántas cerró.
+function reconciliarCorreccionesConSAP() {
+  const ss = SpreadsheetApp.openById(SHEET_ID_CRM);
+
+  // Mapa código -> [Tel1, Tel2] desde la cartera.
+  const dCli = ss.getSheets()[0].getDataRange().getValues();
+  const telPorCodigo = {};
+  for (let j = 1; j < dCli.length; j++) {
+    const cod = String(dCli[j][1]).trim().replace(/'/g, '');
+    if (cod) telPorCodigo[cod] = [String(dCli[j][6] || ''), String(dCli[j][7] || '')];
+  }
+
+  const hCorr = ss.getSheetByName('CORRECCIONES_CONTACTO');
+  if (!hCorr || hCorr.getLastRow() <= 1) return 0;
+  const dCorr = hCorr.getDataRange().getValues();
+  const sello = 'Aplicada en SAP (auto) ' + Utilities.formatDate(new Date(), "GMT-6", "dd/MM/yyyy HH:mm");
+  let cerradas = 0;
+  for (let i = 1; i < dCorr.length; i++) {
+    const estadoSync = String(dCorr[i][9] || '').trim();
+    if (estadoSync && estadoSync !== 'Pendiente revisión') continue; // ya cerrada
+    const telNuevo = _normalizarTelefonoSV(dCorr[i][5]);
+    if (!telNuevo) continue; // tareas de solo-estado no se autocierran
+    const cod = String(dCorr[i][2]).trim().replace(/'/g, '');
+    const tels = telPorCodigo[cod];
+    if (!tels) continue;
+    if (_mismoTelefono(telNuevo, tels[0]) || _mismoTelefono(telNuevo, tels[1])) {
+      hCorr.getRange(i + 1, 10).setValue(sello);
+      cerradas++;
+    }
+  }
+  return cerradas;
 }
 
 function obtenerDatosKPIs() {

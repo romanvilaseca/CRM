@@ -2755,8 +2755,14 @@
                 google.script.run.withSuccessHandler(function(res) {
                     document.getElementById('estado-' + uiPrefix).innerText = "¡Completado!";
                     actualizarDashboard();
-                    if(tipo === 'Clientes') loadC();
-                    input.value = ""; 
+                    if(tipo === 'Clientes') {
+                        loadC();
+                        if (res && res.autoCerradas > 0) {
+                            alert('✅ Importación completa. Se cerraron solas ' + res.autoCerradas + ' tarea(s) de teléfono porque el número ya coincide con SAP.');
+                            if (typeof cargarTareasSAP === 'function') cargarTareasSAP();
+                        }
+                    }
+                    input.value = "";
                 }).finalizarCargaCSV(tipo);
                 return;
             }
