@@ -233,21 +233,29 @@
 
             <div id="indicador-filtros" class="bg-blue-50 text-blue-700 p-4 rounded-2xl border border-blue-100 mb-6 text-xs md:text-sm font-bold text-center shadow-sm hidden transition-all"></div>
 
+            <div id="banner-sugerencia-clase" class="hidden mb-3 bg-blue-50 border border-blue-200 rounded-2xl px-4 py-2.5 flex items-center justify-center gap-2 fade-in">
+                <span class="text-[10px] md:text-[11px] font-black text-blue-700 uppercase tracking-widest">👇 Tocá una categoría para enfocar tu día</span>
+                <span class="text-blue-600 text-base animate-bounce">↓</span>
+            </div>
+
             <div id="contenedor-clasificacion" class="grid grid-cols-3 gap-2 md:gap-4 mb-6 hidden fade-in">
-                <button onclick="toggleFiltro('clase', 'A')" id="btn-clase-A" class="bg-white p-3 md:p-4 rounded-3xl border border-slate-200 text-center hover:border-rose-400 hover:shadow-md transition-all active:scale-95 group relative overflow-hidden">
-                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest group-hover:text-rose-500 transition-colors">⭐ VIP (A)</p>
+                <button type="button" onclick="toggleFiltro('clase', 'A')" id="btn-clase-A" class="bg-white p-3 md:p-4 rounded-3xl border border-slate-200 text-center hover:border-rose-400 hover:shadow-md transition-all active:scale-95 group relative overflow-hidden">
+                    <span id="check-clase-A" class="hidden absolute top-1.5 right-1.5 bg-rose-500 text-white rounded-full w-5 h-5 items-center justify-center text-[10px] font-black shadow-md">✓</span>
+                    <p class="text-[10px] font-black text-rose-500 uppercase tracking-widest transition-colors">🔥 Prioridad Alta</p>
                     <h3 class="text-xl md:text-2xl font-black text-slate-800 mt-1" id="count-clase-A">0/0</h3>
-                    <p class="text-[8px] md:text-[9px] font-bold text-slate-400 uppercase mt-1">Gestionados</p>
+                    <p class="text-[9px] md:text-[10px] font-bold text-slate-500 mt-1 leading-tight">Atendelos ya</p>
                 </button>
-                <button onclick="toggleFiltro('clase', 'B')" id="btn-clase-B" class="bg-white p-3 md:p-4 rounded-3xl border border-slate-200 text-center hover:border-amber-400 hover:shadow-md transition-all active:scale-95 group relative overflow-hidden">
-                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest group-hover:text-amber-500 transition-colors">👍 Regulares (B)</p>
+                <button type="button" onclick="toggleFiltro('clase', 'B')" id="btn-clase-B" class="bg-white p-3 md:p-4 rounded-3xl border border-slate-200 text-center hover:border-amber-400 hover:shadow-md transition-all active:scale-95 group relative overflow-hidden">
+                    <span id="check-clase-B" class="hidden absolute top-1.5 right-1.5 bg-amber-500 text-white rounded-full w-5 h-5 items-center justify-center text-[10px] font-black shadow-md">✓</span>
+                    <p class="text-[10px] font-black text-amber-500 uppercase tracking-widest transition-colors">🔄 Mantener</p>
                     <h3 class="text-xl md:text-2xl font-black text-slate-800 mt-1" id="count-clase-B">0/0</h3>
-                    <p class="text-[8px] md:text-[9px] font-bold text-slate-400 uppercase mt-1">Gestionados</p>
+                    <p class="text-[9px] md:text-[10px] font-bold text-slate-500 mt-1 leading-tight">Compraron el año pasado</p>
                 </button>
-                <button onclick="toggleFiltro('clase', 'C')" id="btn-clase-C" class="bg-white p-3 md:p-4 rounded-3xl border border-slate-200 text-center hover:border-slate-400 hover:shadow-md transition-all active:scale-95 group relative overflow-hidden">
-                    <p class="text-[10px] font-black text-slate-400 uppercase tracking-widest transition-colors">👋 Esporádicos (C)</p>
+                <button type="button" onclick="toggleFiltro('clase', 'C')" id="btn-clase-C" class="bg-white p-3 md:p-4 rounded-3xl border border-slate-200 text-center hover:border-emerald-400 hover:shadow-md transition-all active:scale-95 group relative overflow-hidden">
+                    <span id="check-clase-C" class="hidden absolute top-1.5 right-1.5 bg-emerald-500 text-white rounded-full w-5 h-5 items-center justify-center text-[10px] font-black shadow-md">✓</span>
+                    <p class="text-[10px] font-black text-emerald-600 uppercase tracking-widest transition-colors">🚀 Activar</p>
                     <h3 class="text-xl md:text-2xl font-black text-slate-800 mt-1" id="count-clase-C">0/0</h3>
-                    <p class="text-[8px] md:text-[9px] font-bold text-slate-400 uppercase mt-1">Gestionados</p>
+                    <p class="text-[9px] md:text-[10px] font-bold text-slate-500 mt-1 leading-tight">Comprarán más si los buscás</p>
                 </button>
             </div>
 
@@ -423,7 +431,7 @@
                             <span class="text-sm font-black text-slate-800">⚠️ Clientes en riesgo</span>
                             <span id="lst-riesgo-cnt" class="text-[10px] font-black text-orange-600 bg-orange-50 px-2 py-1 rounded-full">0</span>
                         </summary>
-                        <div class="px-4 pb-4"><p class="text-[10px] text-slate-400 mb-2">Clase A que compró el año pasado pero $0 este año. Rescatar.</p><div id="lst-riesgo" class="max-h-80 overflow-y-auto text-xs">Cargando…</div></div>
+                        <div class="px-4 pb-4"><p class="text-[10px] text-slate-400 mb-2">Prioridad Alta que compró el año pasado pero $0 este año. Rescatar.</p><div id="lst-riesgo" class="max-h-80 overflow-y-auto text-xs">Cargando…</div></div>
                     </details>
                 </div>
                 <div class="bg-white rounded-[25px] border border-slate-200 shadow-sm overflow-hidden">
@@ -615,7 +623,7 @@
                         <div class="flex items-center gap-3">
                             <span class="text-2xl">🚨</span>
                             <div>
-                                <h3 class="text-lg font-black text-rose-700 leading-none">Radar de Fugas (VIP)</h3>
+                                <h3 class="text-lg font-black text-rose-700 leading-none">Radar de Fugas (Prioridad Alta)</h3>
                                 <p class="text-[10px] font-bold text-rose-400 uppercase tracking-widest mt-1">Compraron en año pasado, pero llevan $0 este año</p>
                             </div>
                         </div>
@@ -924,7 +932,7 @@
         "Una visita en persona vale más que 10 mensajes de WhatsApp.",
         "Cuando visites a un cliente, lleva siempre una propuesta o novedad — nunca llegues con las manos vacías.",
         "Registra la visita inmediatamente después de hacerla, no al final del día. La hora queda registrada en tu rendimiento del día.",
-        "Tu cartera de clientes Clase A genera el 80% de tus ventas.",
+        "Tu cartera de clientes de Prioridad Alta genera el 80% de tus ventas.",
         "Un cliente satisfecho no necesita que lo convenzas — solo necesita que lo recuerdes.",
         "Un teléfono incorrecto en el sistema puede costarte meses de ventas perdidas.",
         "Llamarle al cliente para actualizar sus datos es una buena excusa para que te recuerde!",
@@ -937,7 +945,7 @@
         "Antes de cada llamada, revisá la última interacción registrada — el cliente lo notará.",
         "Si un cliente no responde, validá primero el número antes de marcarlo como inactivo.",
         "Registrá la interacción en caliente. Si esperás al final del día, perdés los detalles.",
-        "Empezá el día por los Clase A, no por los más fáciles.",
+        "Empezá el día por los de Prioridad Alta, no por los más fáciles.",
         "Una visita sin objetivo definido es una visita perdida.",
         "Conocer 3 productos nuevos por semana te diferencia del 80% de la fuerza de venta.",
         "La promo que no comunicás, no existe para el cliente."
@@ -973,7 +981,12 @@
         // Resumen explicativo de puntos (parte superior, para el vendedor).
         const lista = document.getElementById('resumen-puntos-lista');
         if (lista) {
-            lista.innerHTML = RESULTADOS_CONFIG.slice().sort(function(a,b){ return b.puntos - a.puntos; }).map(function(r) {
+            // Bonificaciones automáticas que no son resultados de interacción (no van en el dropdown).
+            const BONUS_PUNTOS = [
+                { resultado: '📞 Actualizar teléfono del cliente', puntos: 1 }
+            ];
+            const listaCompleta = RESULTADOS_CONFIG.concat(BONUS_PUNTOS);
+            lista.innerHTML = listaCompleta.slice().sort(function(a,b){ return b.puntos - a.puntos; }).map(function(r) {
                 let color = r.puntos >= 2 ? 'text-emerald-600 bg-emerald-50 border-emerald-200'
                           : r.puntos >= 1 ? 'text-blue-600 bg-blue-50 border-blue-200'
                           : r.puntos > 0 ? 'text-amber-600 bg-amber-50 border-amber-200'
@@ -2086,19 +2099,26 @@
     }
 
     function toggleFiltro(tipo, valor) {
-        if (filtrosActivos[tipo] === valor) filtrosActivos[tipo] = null; 
+        if (filtrosActivos[tipo] === valor) filtrosActivos[tipo] = null;
         else {
             filtrosActivos[tipo] = valor;
-            if (tipo === 'dep') filtrosActivos.mun = null; 
+            if (tipo === 'dep') filtrosActivos.mun = null;
         }
-        
-        PAGINA_ACTUAL = 20; 
-        
+
+        PAGINA_ACTUAL = 20;
+
         const lista = document.getElementById('lista');
+        const alturaPrev = lista.offsetHeight;
+        const scrollPrev = window.scrollY;
+        lista.style.minHeight = alturaPrev + 'px';
         lista.innerHTML = '<div class="col-span-1 md:col-span-2 text-center py-20 text-blue-500 font-black animate-pulse uppercase tracking-widest text-xs">Actualizando...</div>';
         document.getElementById('contenedor-ver-mas').classList.add('hidden');
 
-        setTimeout(() => { aplicarFiltros(); }, 50); 
+        setTimeout(() => {
+            aplicarFiltros();
+            lista.style.minHeight = '';
+            window.scrollTo(0, scrollPrev);
+        }, 50);
     }
 
     document.getElementById('busc').addEventListener('input', e => {
@@ -2120,9 +2140,9 @@
         else partes.push("Mostrando clientes");
 
         if (filtrosActivos.clase) {
-            if(filtrosActivos.clase === 'A') partes.push("de <span class='text-rose-600'>Clase VIP</span>");
-            if(filtrosActivos.clase === 'B') partes.push("de <span class='text-amber-600'>Clase Regular</span>");
-            if(filtrosActivos.clase === 'C') partes.push("de <span class='text-slate-500'>Clase Esporádicos</span>");
+            if(filtrosActivos.clase === 'A') partes.push("de <span class='text-rose-600'>Prioridad Alta 🔥</span>");
+            if(filtrosActivos.clase === 'B') partes.push("de <span class='text-amber-600'>Mantener 🔄</span>");
+            if(filtrosActivos.clase === 'C') partes.push("de <span class='text-emerald-600'>Activar 🚀</span>");
         }
 
         if (filtrosActivos.tipoCli) partes.push(`tipo <b>${filtrosActivos.tipoCli}</b>`);
@@ -2180,6 +2200,8 @@
             `;
             document.getElementById('contenedor-ver-mas').classList.add('hidden');
             document.getElementById('contenedor-clasificacion').classList.add('hidden');
+            const bannerSugOff = document.getElementById('banner-sugerencia-clase');
+            if (bannerSugOff) bannerSugOff.classList.add('hidden');
             actualizarIndicadorUI();
             return;
         }
@@ -2212,17 +2234,43 @@
 
         if (datosBase.length > 0) {
             document.getElementById('contenedor-clasificacion').classList.remove('hidden');
-            
+            const bannerSug = document.getElementById('banner-sugerencia-clase');
+            if (bannerSug) bannerSug.classList.toggle('hidden', !!filtrosActivos.clase);
+
+            const TEMAS_CLASE = {
+                'A': { bg: 'bg-rose-50', border: 'border-rose-500', ring: 'ring-rose-300' },
+                'B': { bg: 'bg-amber-50', border: 'border-amber-500', ring: 'ring-amber-300' },
+                'C': { bg: 'bg-emerald-50', border: 'border-emerald-500', ring: 'ring-emerald-300' }
+            };
+            const CLASES_TEMA_TODAS = [
+                'bg-rose-50', 'border-rose-500', 'ring-rose-300',
+                'bg-amber-50', 'border-amber-500', 'ring-amber-300',
+                'bg-emerald-50', 'border-emerald-500', 'ring-emerald-300'
+            ];
+
             ['A', 'B', 'C'].forEach(cl => {
                 let btn = document.getElementById('btn-clase-' + cl);
+                let check = document.getElementById('check-clase-' + cl);
+                if (!btn) return;
+
+                btn.classList.remove('ring-4', 'ring-blue-300', 'bg-blue-50', 'opacity-50', 'scale-105');
+                CLASES_TEMA_TODAS.forEach(c => btn.classList.remove(c));
+                btn.classList.add('bg-white', 'border-slate-200');
+                if (check) { check.classList.add('hidden'); check.classList.remove('flex'); }
+
                 if (filtrosActivos.clase === cl) {
-                    btn.classList.add('ring-4', 'ring-blue-300', 'bg-blue-50');
-                } else {
-                    btn.classList.remove('ring-4', 'ring-blue-300', 'bg-blue-50');
+                    const t = TEMAS_CLASE[cl];
+                    btn.classList.remove('bg-white', 'border-slate-200');
+                    btn.classList.add('ring-4', 'scale-105', t.bg, t.border, t.ring);
+                    if (check) { check.classList.remove('hidden'); check.classList.add('flex'); }
+                } else if (filtrosActivos.clase) {
+                    btn.classList.add('opacity-50');
                 }
             });
         } else {
             document.getElementById('contenedor-clasificacion').classList.add('hidden');
+            const bannerSugOff = document.getElementById('banner-sugerencia-clase');
+            if (bannerSugOff) bannerSugOff.classList.add('hidden');
         }
 
         if (filtrosActivos.clase) {
@@ -2287,9 +2335,9 @@
                 }
             }
 
-            if (c.clase === 'A') badgeClase = '⭐ VIP (A)';
-            else if (c.clase === 'B') badgeClase = '👍 Regular (B)';
-            else badgeClase = '👋 Esporádico (C)';
+            if (c.clase === 'A') badgeClase = '🔥 Prioridad Alta';
+            else if (c.clase === 'B') badgeClase = '🔄 Mantener';
+            else badgeClase = '🚀 Activar';
 
             let borderCard = isRojoOscuro ? 'border-rose-500 shadow-rose-200 ring-2 ring-rose-200' : (c.clase === 'A' && !c.contactado ? 'border-rose-300 shadow-rose-100' : 'border-slate-200');
             let nomLimpio = c.nombre.replace(/'/g, "");
@@ -3483,7 +3531,7 @@
                 <p class="text-2xl font-black text-emerald-800">${countW + countL}</p>
             </div>
             <div class="bg-amber-50 border border-amber-200 p-4 rounded-[25px] text-center shadow-sm">
-                <p class="text-[9px] font-black text-amber-500 uppercase mb-1">Cobertura VIP</p>
+                <p class="text-[9px] font-black text-amber-500 uppercase mb-1">Cobertura Prioritaria</p>
                 <p class="text-2xl font-black text-amber-800">${pctCobertura}%</p>
             </div>
         `;
@@ -3493,7 +3541,7 @@
         chartInstanciaAdmin = new Chart(ctxAdmin, {
             type: 'bar',
             data: {
-                labels: ['VIP (A)', 'Regulares (B)', 'Esporádicos (C)'],
+                labels: ['🔥 Prioridad Alta', '🔄 Mantener', '🚀 Activar'],
                 datasets: [
                     { label: 'Gestionados', data: [gestA, gestB, gestC], backgroundColor: '#10b981', borderRadius: 4 },
                     { label: 'Pendientes', data: [totalA - gestA, totalB - gestB, totalC - gestC], backgroundColor: '#cbd5e1', borderRadius: 4 }
@@ -3625,7 +3673,7 @@
         
         let htmlRiesgo = '';
         if(clientesRiesgo.length === 0) {
-            htmlRiesgo = '<div class="text-center py-4 text-emerald-500 font-bold text-xs">✅ Todo en orden. No hay VIPs con $0 compras este año.</div>';
+            htmlRiesgo = '<div class="text-center py-4 text-emerald-500 font-bold text-xs">✅ Todo en orden. No hay clientes de Prioridad Alta con $0 compras este año.</div>';
         } else {
             clientesRiesgo.forEach(c => {
                 let nomLimpio = c.nombre.replace(/'/g, "");
