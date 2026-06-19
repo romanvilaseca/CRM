@@ -2163,10 +2163,67 @@ function guardarCorreccionContacto(d, correoVendedor) {
   }
 }
 
+// Compara dos teléfonos por sus últimos 8 dígitos (ignora formato, guiones, +503).
+function _mismoTelefono(a, b) {
+  const da = String(a || '').replace(/\D/g, '');
+  const db = String(b || '').replace(/\D/g, '');
+  if (!da || !db) return false;
+  const la = da.length >= 8 ? da.slice(-8) : da;
+  const lb = db.length >= 8 ? db.slice(-8) : db;
+  return la === lb;
+}
+
+// Teléfonos (Tel1, Tel2) que el cliente tiene registrados en SAP/CLIENTES_ASIGNADOS.
+function _telefonosRegistradosSAP(ss, codigo) {
+  try {
+    const codLimpio = String(codigo || '').trim().replace(/'/g, '');
+    const d = ss.getSheets()[0].getDataRange().getValues();
+    for (let j = 1; j < d.length; j++) {
+      if (String(d[j][1]).trim().replace(/'/g, '') === codLimpio) {
+        return [String(d[j][6] || ''), String(d[j][7] || '')];
+      }
+    }
+  } catch (e) {}
+  return ['', ''];
+}
+
+// ¿Este cliente YA recibió antes un punto por corrección de teléfono (de cualquier vendedor)?
+function _clienteYaTienePuntoCorreccion(ss, codigo) {
+  try {
+    const h = ss.getSheetByName('VISITAS');
+    if (!h || h.getLastRow() <= 1) return false;
+    const codLimpio = String(codigo || '').trim().replace(/'/g, '');
+    const d = h.getDataRange().getValues();
+    for (let i = 1; i < d.length; i++) {
+      if (String(d[i][9] || '').trim() === 'correccion' &&
+          String(d[i][2]).trim().replace(/'/g, '') === codLimpio) {
+        return true;
+      }
+    }
+  } catch (e) {}
+  return false;
+}
+
 // Escribe la fila de bono por corrección de teléfono en VISITAS. Devuelve los puntos otorgados.
+// Guardas (para que el +1 no sea farmeable):
+//   1. El número nuevo debe ser DISTINTO al que el cliente ya tiene en SAP (Tel1/Tel2).
+//   2. El cliente NO debe haber recibido antes un punto por corrección (de ningún vendedor).
+// Si una guarda no se cumple, NO se otorga punto (la tarea para SAP igual se registra aparte).
 function otorgarPuntoCorreccion(codigo, nombre, telNuevo, correoVendedor) {
   try {
     const ss = SpreadsheetApp.openById(SHEET_ID_CRM);
+
+    // Guarda 1: el número debe cambiar respecto a lo guardado en SAP.
+    const telsSAP = _telefonosRegistradosSAP(ss, codigo);
+    if (_mismoTelefono(telNuevo, telsSAP[0]) || _mismoTelefono(telNuevo, telsSAP[1])) {
+      return 0; // mismo número que ya está en SAP: no hay corrección real
+    }
+
+    // Guarda 2: una sola vez por cliente (cubre a dos vendedores sobre el mismo cliente).
+    if (_clienteYaTienePuntoCorreccion(ss, codigo)) {
+      return 0;
+    }
+
     let h = ss.getSheetByName('VISITAS') || ss.insertSheet('VISITAS');
     if (h.getLastRow() === 0) h.appendRow(['Fecha','Vendedor','Código','Cliente','Tipo de Interacción','Nota', 'Ubicación GPS','Resultado','Puntos','Origen_Puntaje']);
     h.appendRow([
