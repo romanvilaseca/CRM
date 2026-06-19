@@ -798,18 +798,17 @@ function generarInactivosPorVendedorPDF(vendedorNombre, correoAdmin) {
     const adminAlias = getAliasMap()[String(correoAdmin || '').trim().toLowerCase()] || (String(correoAdmin || '').split('@')[0] || 'admin');
     const emision = Utilities.formatDate(new Date(), "GMT-6", "dd/MM/yyyy HH:mm");
     const thMeses = meses.map(function(mm, idx){
-      const hl = (idx === idxMesAP || idx === idxMesAct) ? ' style="background:#1d4ed8;"' : '';
-      return '<th' + hl + '>' + mm.label + '</th>';
+      const cls = (idx === idxMesAP || idx === idxMesAct) ? ' class="cmp"' : '';
+      return '<th' + cls + '>' + mm.label + '</th>';
     }).join('');
     const filas = lista.map(function(x, n){
       const celdas = x.mensual.map(function(v, idx){
-        const esComp = (idx === idxMesAP || idx === idxMesAct);
-        const bg = esComp ? 'background:#eff6ff;' : '';
+        const cls = (idx === idxMesAP || idx === idxMesAct) ? ' class="cmp"' : '';
         if (v > 0) {
-          return '<td style="text-align:right;' + bg + (esComp ? 'font-weight:900;' : '') + '">$' + _fmtMonto(v) + '</td>';
+          return '<td' + cls + ' style="text-align:right;font-weight:900;">$' + _fmtMonto(v) + '</td>';
         }
         // Mes sin compra: en rojo.
-        return '<td style="text-align:right;color:#dc2626;' + bg + '">$0</td>';
+        return '<td' + cls + ' style="text-align:right;color:#dc2626;">$0</td>';
       }).join('');
       return '<tr><td style="text-align:center;color:#94a3b8;">' + (n + 1) + '</td>'
         + '<td style="font-family:monospace;">' + x.codigo + '</td>'
@@ -821,7 +820,8 @@ function generarInactivosPorVendedorPDF(vendedorNombre, correoAdmin) {
     const mesActualLabel = meses[idxMesAct].label, mesAPLabel = meses[idxMesAP].label;
     const html = '<!DOCTYPE html><html><head><meta charset="utf-8"><style>'
       + '@page { size: A4 landscape; margin: 12mm; }'
-      + 'body{font-family:Arial,sans-serif;color:#0f172a;font-size:9px;}'
+      + 'body{font-family:Arial,sans-serif;color:#0f172a;font-size:9px;-webkit-print-color-adjust:exact;print-color-adjust:exact;}'
+      + '.cmp{background:#dbeafe;border-left:2px solid #2563eb;border-right:2px solid #2563eb;} th.cmp{background:#2563eb;color:#fff;border-left:2px solid #2563eb;border-right:2px solid #2563eb;}'
       + 'h1{font-size:18px;margin:0 0 2px 0;} .sub{color:#64748b;font-size:10px;text-transform:uppercase;letter-spacing:1.5px;font-weight:700;margin:0 0 2px 0;}'
       + '.emis{color:#94a3b8;font-size:9px;margin:0 0 12px 0;}'
       + '.kpis{display:flex;gap:8px;margin-bottom:12px;} .kpi{background:#0f172a;color:#fff;border-radius:10px;padding:8px 12px;flex:1;text-align:center;}'
