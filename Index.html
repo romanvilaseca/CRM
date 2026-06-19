@@ -787,6 +787,7 @@
                       <p class="text-sm font-black text-amber-800 leading-tight" id="mTelCorregidoNum">--</p>
                       <p class="text-[8px] font-bold text-amber-600 leading-tight mt-0.5" id="mTelCorregidoMeta">pendiente de aplicar en SAP</p>
                   </div>
+                  <p id="mTelHistorico" class="hidden w-full mt-1 text-[9px] font-bold text-slate-400 text-center">📜 Anterior: <span id="mTelHistoricoNum"></span></p>
                   <button onclick="toggleCorreccionFicha()" class="mt-2 text-[9px] font-black text-rose-600 uppercase tracking-widest hover:text-rose-800 hover:bg-rose-50 px-3 py-1 rounded-full transition-all">📞 Corregir teléfono</button>
                   <div id="bloque-correccion-ficha" class="hidden w-full mt-3 text-left">
                       <input id="fic-telalt" type="tel" inputmode="numeric" class="w-full p-2.5 bg-white rounded-xl text-xs border border-rose-200 outline-none focus:ring-2 focus:ring-rose-400 mb-2" placeholder="Teléfono correcto (8 dígitos)">
@@ -3038,6 +3039,7 @@
         document.getElementById('mTel1').innerText = '--';
         document.getElementById('mTel2').innerText = '--';
         document.getElementById('mTelCorregido').classList.add('hidden');
+        document.getElementById('mTelHistorico').classList.add('hidden');
         document.getElementById('mVend').innerText = '--';
         document.getElementById('mAnios').innerHTML = '';
         document.getElementById('mCrecimiento').innerHTML = '';
@@ -3077,6 +3079,15 @@
                     telCorrBox.classList.remove('hidden');
                 } else {
                     telCorrBox.classList.add('hidden');
+                }
+
+                // Histórico de números anteriores (correcciones ya aplicadas)
+                const telHistBox = document.getElementById('mTelHistorico');
+                if (res.contacto.telHistorico && res.contacto.telHistorico.length) {
+                    document.getElementById('mTelHistoricoNum').innerText = res.contacto.telHistorico.join(', ');
+                    telHistBox.classList.remove('hidden');
+                } else {
+                    telHistBox.classList.add('hidden');
                 }
 
                 if(res.anios.length > 0) {
@@ -3657,11 +3668,28 @@
         if(x.validado && !x.telNuevo) detalle.push('número registrado: <b>'+x.validado.toLowerCase()+'</b>');
         let bordeCls = x.esHoy ? 'border-l-4 border-l-amber-400 bg-amber-50 px-3 -mx-3' : 'border-b border-slate-100';
         let badge = x.esHoy ? '<span class="ml-2 text-[8px] font-black bg-amber-500 text-white px-2 py-0.5 rounded-full uppercase tracking-widest">NUEVA</span>' : '';
+        let accion = x.telNuevo
+            ? '<button onclick="aplicarTareaSAP(\''+x.codigo+'\',\''+x.telNuevo+'\')" class="mt-1 text-[9px] font-black text-emerald-700 bg-emerald-50 hover:bg-emerald-100 px-3 py-1 rounded-full uppercase tracking-widest transition-all active:scale-95">✅ Marcar aplicada</button>'
+            : '';
         return '<div class="' + bordeCls + ' py-2 mb-1">'
             + '<p class="font-bold text-slate-700">'+x.codigo+' · '+x.cliente + badge + '</p>'
             + '<p class="text-slate-500 text-[11px]">'+detalle.join(' · ')+'</p>'
             + '<p class="text-[9px] text-slate-300">'+x.fecha+' · 👤 '+x.vendedor+'</p>'
+            + accion
             + '</div>';
+    }
+
+    function aplicarTareaSAP(codigo, telNuevo) {
+        if (!confirm('¿Aplicar el cambio en la cartera del CRM?\n\n' + codigo + ' → Tel1 = ' + telNuevo + '\n\nEl número viejo quedará como histórico y la tarea se marcará como aplicada.')) return;
+        google.script.run.withSuccessHandler(function(res){
+            if (res && res.exito) {
+                alert('✅ Aplicado. ' + codigo + ': Tel1 = ' + res.telNuevo + (res.telViejo ? (' (antes ' + res.telViejo + ')') : '') + '. Tareas marcadas: ' + res.marcadas + '.');
+                cargarTareasSAP();
+            } else {
+                alert((res && res.mensaje) ? res.mensaje : 'No se pudo aplicar la corrección.');
+            }
+        }).withFailureHandler(function(){ alert('Error de red al aplicar la corrección.'); })
+          .aplicarCorreccionTelefono(codigo, telNuevo, usuarioLogueado);
     }
 
     function actualizarBadgeAuditoria(count) {

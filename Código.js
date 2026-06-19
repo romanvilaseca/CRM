@@ -1699,18 +1699,30 @@ function obtenerDetalleCliente(cod) {
       const hCorr = ssCRM.getSheetByName('CORRECCIONES_CONTACTO');
       if (hCorr && hCorr.getLastRow() > 1) {
         const dCorr = hCorr.getDataRange().getValues();
+        const historico = [];
         for (let k = 1; k < dCorr.length; k++) {
           if (String(dCorr[k][2]).trim().replace(/'/g, "") !== codLimpio) continue;
           const telNuevo = _normalizarTelefonoSV(dCorr[k][5]);
-          if (!telNuevo) continue;
           const estadoSync = String(dCorr[k][9] || '').trim();
-          if (estadoSync && estadoSync !== 'Pendiente revisión') continue; // ya aplicada en SAP
+          const aplicada = estadoSync.indexOf('Aplicada') === 0;
+          if (aplicada) {
+            // Corrección ya aplicada: el número viejo queda como histórico.
+            const viejo = String(dCorr[k][4] || '').trim();
+            if (viejo && !_mismoTelefono(viejo, contacto.tel1)) historico.push(viejo);
+            continue;
+          }
+          if (!telNuevo) continue;
+          if (estadoSync && estadoSync !== 'Pendiente revisión') continue; // estado raro: ignorar
           const fVal = dCorr[k][0];
           const emailC = String(dCorr[k][1]).trim().toLowerCase();
           contacto.telCorregido = telNuevo;
           contacto.telAnterior = String(dCorr[k][4] || '').trim();
           contacto.telCorregidoFecha = (fVal instanceof Date) ? Utilities.formatDate(fVal, "GMT-6", "dd/MM/yyyy HH:mm") : String(fVal).trim();
           contacto.telCorregidoPor = aliasMap[emailC] || (emailC ? emailC.split('@')[0] : '');
+        }
+        if (historico.length) {
+          // Únicos, sin repetir el número actual.
+          contacto.telHistorico = historico.filter(function(v, i, a){ return a.indexOf(v) === i; });
         }
       }
     } catch (eCorr) { /* la ficha no debe fallar por esto */ }
@@ -2280,6 +2292,57 @@ function obtenerTareasSAP() {
     return { exito: true, tareas: tareas, totalHoy: totalHoy };
   } catch (e) {
     return { exito: false, mensaje: e.message, tareas: [], totalHoy: 0 };
+  }
+}
+
+// Marca una corrección de teléfono como APLICADA: actualiza el Tel1 del cliente en la
+// cartera (CLIENTES_ASIGNADOS) con el número nuevo, y sella como "Aplicada en SAP" todas
+// las filas pendientes de ese cliente con ese número en CORRECCIONES_CONTACTO (cubre
+// duplicados). El número viejo se conserva en esas filas y queda como histórico en la ficha.
+function aplicarCorreccionTelefono(codigo, telNuevo, correoAdmin) {
+  try {
+    const codLimpio = String(codigo || '').trim().replace(/'/g, '');
+    const telNuevoNorm = _normalizarTelefonoSV(telNuevo);
+    if (!codLimpio) return { exito: false, mensaje: 'Falta el código del cliente.' };
+    if (!telNuevoNorm) return { exito: false, mensaje: 'El teléfono nuevo no es válido (8 dígitos).' };
+
+    const ss = SpreadsheetApp.openById(SHEET_ID_CRM);
+
+    // 1) Actualizar Tel1 en la cartera (CLIENTES_ASIGNADOS). El viejo queda como histórico
+    //    en la fila de CORRECCIONES_CONTACTO (no se borra de ahí).
+    const hojaCli = ss.getSheets()[0];
+    const dCli = hojaCli.getDataRange().getValues();
+    let actualizado = false;
+    let telViejo = '';
+    for (let j = 1; j < dCli.length; j++) {
+      if (String(dCli[j][1]).trim().replace(/'/g, '') === codLimpio) {
+        telViejo = String(dCli[j][6] || '').trim();
+        hojaCli.getRange(j + 1, 7).setValue("'" + telNuevoNorm); // col 7 = Tel1; apóstrofo: forzar texto
+        actualizado = true;
+        break;
+      }
+    }
+    if (!actualizado) return { exito: false, mensaje: 'No se encontró el cliente ' + codLimpio + ' en la cartera.' };
+
+    // 2) Sellar como aplicadas las tareas pendientes de ese cliente/número (incluye duplicados).
+    const hCorr = obtenerHojaCorrecciones();
+    const dCorr = hCorr.getDataRange().getValues();
+    const ahora = Utilities.formatDate(new Date(), "GMT-6", "dd/MM/yyyy HH:mm");
+    const adminAlias = (getAliasMap()[String(correoAdmin || '').trim().toLowerCase()]) || 'admin';
+    const sello = 'Aplicada en SAP ' + ahora + ' (' + adminAlias + ')';
+    let marcadas = 0;
+    for (let i = 1; i < dCorr.length; i++) {
+      if (String(dCorr[i][2]).trim().replace(/'/g, '') !== codLimpio) continue;
+      if (!_mismoTelefono(dCorr[i][5], telNuevoNorm)) continue;
+      const estadoSync = String(dCorr[i][9] || '').trim();
+      if (estadoSync && estadoSync !== 'Pendiente revisión') continue;
+      hCorr.getRange(i + 1, 10).setValue(sello); // col 10 = Estado de sincronización
+      marcadas++;
+    }
+
+    return { exito: true, telViejo: telViejo, telNuevo: telNuevoNorm, marcadas: marcadas };
+  } catch (e) {
+    return { exito: false, mensaje: e.message };
   }
 }
 
