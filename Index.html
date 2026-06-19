@@ -449,7 +449,12 @@
                         </div>
                         <span id="sap-count" class="text-[10px] font-black text-rose-600 bg-rose-50 px-2 py-1 rounded-full">0</span>
                     </div>
-                    <p class="text-[10px] text-slate-400 mb-3">Correcciones de teléfono/estado pendientes de aplicar en SAP.</p>
+                    <p class="text-[10px] text-slate-400 mb-2">Correcciones de teléfono/estado pendientes de aplicar en SAP.</p>
+                    <div id="sap-filtros" class="flex gap-1 mb-3">
+                        <button type="button" data-f="hoy" onclick="setSapFiltro('hoy')" class="text-[10px] font-black px-3 py-1 rounded-full bg-slate-100 text-slate-500">Hoy</button>
+                        <button type="button" data-f="anteriores" onclick="setSapFiltro('anteriores')" class="text-[10px] font-black px-3 py-1 rounded-full bg-slate-100 text-slate-500">Anteriores</button>
+                        <button type="button" data-f="todo" onclick="setSapFiltro('todo')" class="text-[10px] font-black px-3 py-1 rounded-full bg-slate-800 text-white">Todo</button>
+                    </div>
                     <div id="sap-contenido" class="max-h-72 overflow-y-auto text-xs">Cargando…</div>
                 </div>
                 <div class="bg-white p-6 rounded-[30px] border border-amber-200 shadow-sm">
@@ -457,7 +462,12 @@
                         <span class="text-lg">📦</span>
                         <h3 class="text-sm font-black text-slate-800">Demanda no cubierta</h3>
                     </div>
-                    <p class="text-[10px] text-slate-400 mb-3">Productos más pedidos que no teníamos (para compras).</p>
+                    <p class="text-[10px] text-slate-400 mb-2">Productos más pedidos que no teníamos (para compras).</p>
+                    <div id="demanda-filtros" class="flex gap-1 mb-3">
+                        <button type="button" data-f="hoy" onclick="setDemandaFiltro('hoy')" class="text-[10px] font-black px-3 py-1 rounded-full bg-slate-100 text-slate-500">Hoy</button>
+                        <button type="button" data-f="anteriores" onclick="setDemandaFiltro('anteriores')" class="text-[10px] font-black px-3 py-1 rounded-full bg-slate-100 text-slate-500">Anteriores</button>
+                        <button type="button" data-f="todo" onclick="setDemandaFiltro('todo')" class="text-[10px] font-black px-3 py-1 rounded-full bg-slate-800 text-white">Todo</button>
+                    </div>
                     <div id="demanda-contenido" class="max-h-72 overflow-y-auto text-xs">Cargando…</div>
                 </div>
             </div>
@@ -3569,6 +3579,20 @@
     }
 
     // ===== FASES 3 y 4: paneles de admin =====
+    // Marca el botón activo del control segmentado (Hoy / Anteriores / Todo)
+    function _pintarFiltros(contId, activo) {
+        const cont = document.getElementById(contId);
+        if (!cont) return;
+        cont.querySelectorAll('button[data-f]').forEach(function(b){
+            const on = b.getAttribute('data-f') === activo;
+            b.className = 'text-[10px] font-black px-3 py-1 rounded-full ' + (on ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-500');
+        });
+    }
+
+    let _tareasSAP = [];
+    let _sapFiltro = 'todo';
+    function setSapFiltro(f) { _sapFiltro = f; _pintarFiltros('sap-filtros', f); renderTareasSAP(); }
+
     function cargarTareasSAP() {
         const cont = document.getElementById('sap-contenido');
         const cnt = document.getElementById('sap-count');
@@ -3576,26 +3600,39 @@
         cont.innerHTML = '<p class="text-slate-400 py-3 text-center animate-pulse">Cargando…</p>';
         google.script.run.withSuccessHandler(function(res){
             if(!res || !res.exito){ cont.innerHTML = '<p class="text-rose-400 py-3 text-center">No se pudo cargar.</p>'; return; }
-            const t = res.tareas || [];
+            _tareasSAP = res.tareas || [];
             const hoy = res.totalHoy || 0;
-            cnt.innerText = hoy > 0 ? (t.length + ' · ' + hoy + ' hoy') : t.length;
+            cnt.innerText = hoy > 0 ? (_tareasSAP.length + ' · ' + hoy + ' hoy') : _tareasSAP.length;
             actualizarBadgeAuditoria(hoy);
-            if(!t.length){ cont.innerHTML = '<p class="text-slate-400 py-3 text-center">Sin tareas pendientes. 🎉</p>'; return; }
-            cont.innerHTML = t.map(function(x){
-                let detalle = [];
-                if(x.telNuevo) detalle.push('Tel → <b>'+x.telNuevo+'</b>'+(x.telActual?(' (antes '+x.telActual+')'):''));
-                if(x.estadoCliente) detalle.push('Estado: <b>'+x.estadoCliente+'</b>');
-                if(x.validado) detalle.push('Registrado: '+x.validado);
-                let bordeCls = x.esHoy ? 'border-l-4 border-l-amber-400 bg-amber-50 px-3 -mx-3' : 'border-b border-slate-100';
-                let badge = x.esHoy ? '<span class="ml-2 text-[8px] font-black bg-amber-500 text-white px-2 py-0.5 rounded-full uppercase tracking-widest">NUEVA</span>' : '';
-                return '<div class="' + bordeCls + ' py-2 mb-1">'
-                    + '<p class="font-bold text-slate-700">'+x.codigo+' · '+x.cliente + badge + '</p>'
-                    + '<p class="text-slate-500 text-[11px]">'+detalle.join(' · ')+'</p>'
-                    + '<p class="text-[9px] text-slate-300">'+x.fecha+' · '+x.vendedor+'</p>'
-                    + '</div>';
-            }).join('');
+            renderTareasSAP();
         }).withFailureHandler(function(){ cont.innerHTML = '<p class="text-rose-400 py-3 text-center">Error de red.</p>'; })
           .obtenerTareasSAP();
+    }
+
+    function renderTareasSAP() {
+        const cont = document.getElementById('sap-contenido');
+        if (!cont) return;
+        let t = _tareasSAP;
+        if (_sapFiltro === 'hoy') t = t.filter(function(x){ return x.esHoy; });
+        else if (_sapFiltro === 'anteriores') t = t.filter(function(x){ return !x.esHoy; });
+        if(!t.length){
+            const msg = _sapFiltro === 'hoy' ? 'Sin tareas de hoy.' : (_sapFiltro === 'anteriores' ? 'Sin tareas de días anteriores.' : 'Sin tareas pendientes. 🎉');
+            cont.innerHTML = '<p class="text-slate-400 py-3 text-center">'+msg+'</p>';
+            return;
+        }
+        cont.innerHTML = t.map(function(x){
+            let detalle = [];
+            if(x.telNuevo) detalle.push('Tel → <b>'+x.telNuevo+'</b>'+(x.telActual?(' (antes '+x.telActual+')'):''));
+            if(x.estadoCliente) detalle.push('Estado: <b>'+x.estadoCliente+'</b>');
+            if(x.validado) detalle.push('Registrado: '+x.validado);
+            let bordeCls = x.esHoy ? 'border-l-4 border-l-amber-400 bg-amber-50 px-3 -mx-3' : 'border-b border-slate-100';
+            let badge = x.esHoy ? '<span class="ml-2 text-[8px] font-black bg-amber-500 text-white px-2 py-0.5 rounded-full uppercase tracking-widest">NUEVA</span>' : '';
+            return '<div class="' + bordeCls + ' py-2 mb-1">'
+                + '<p class="font-bold text-slate-700">'+x.codigo+' · '+x.cliente + badge + '</p>'
+                + '<p class="text-slate-500 text-[11px]">'+detalle.join(' · ')+'</p>'
+                + '<p class="text-[9px] text-slate-300">'+x.fecha+' · '+x.vendedor+'</p>'
+                + '</div>';
+        }).join('');
     }
 
     function actualizarBadgeAuditoria(count) {
@@ -3624,22 +3661,53 @@
         }).obtenerTareasSAP();
     }
 
+    let _demandaItems = [];
+    let _demandaFiltro = 'todo';
+    function setDemandaFiltro(f) { _demandaFiltro = f; _pintarFiltros('demanda-filtros', f); renderDemanda(); }
+
     function cargarDemandaResumen() {
         const cont = document.getElementById('demanda-contenido');
         if (!cont) return;
         cont.innerHTML = '<p class="text-slate-400 py-3 text-center animate-pulse">Cargando…</p>';
         google.script.run.withSuccessHandler(function(res){
             if(!res || !res.exito){ cont.innerHTML = '<p class="text-rose-400 py-3 text-center">No se pudo cargar.</p>'; return; }
-            const p = res.productos || [];
-            if(!p.length){ cont.innerHTML = '<p class="text-slate-400 py-3 text-center">Sin registros aún.</p>'; return; }
-            cont.innerHTML = p.map(function(x, i){
-                return '<div class="flex items-center justify-between border-b border-slate-100 py-2">'
-                    + '<span class="font-bold text-slate-700 truncate pr-2">'+(i+1)+'. '+x.producto+'</span>'
-                    + '<span class="text-amber-600 font-black whitespace-nowrap">'+x.veces+'× <span class="text-[9px] text-slate-400">('+x.clientesUnicos+' cli)</span></span>'
-                    + '</div>';
-            }).join('');
+            _demandaItems = res.items || [];
+            renderDemanda();
         }).withFailureHandler(function(){ cont.innerHTML = '<p class="text-rose-400 py-3 text-center">Error de red.</p>'; })
-          .obtenerResumenDemanda();
+          .obtenerDemandaDetalle();
+    }
+
+    function renderDemanda() {
+        const cont = document.getElementById('demanda-contenido');
+        if (!cont) return;
+        const hoy = hoyDDMMYYYY();
+        let items = _demandaItems;
+        if (_demandaFiltro === 'hoy') items = items.filter(function(x){ return (x.fecha || '').substring(0,10) === hoy; });
+        else if (_demandaFiltro === 'anteriores') items = items.filter(function(x){ return (x.fecha || '').substring(0,10) !== hoy; });
+        // Agregar por producto (mismo criterio que obtenerResumenDemanda, pero ya filtrado por fecha)
+        const conteo = {};
+        items.forEach(function(x){
+            const prod = (x.producto || '').trim();
+            if(!prod) return;
+            const k = prod.toLowerCase();
+            if(!conteo[k]) conteo[k] = { producto: prod, veces: 0, clientes: {} };
+            conteo[k].veces++;
+            if(x.codigo) conteo[k].clientes[x.codigo] = true;
+        });
+        const p = Object.keys(conteo).map(function(k){
+            return { producto: conteo[k].producto, veces: conteo[k].veces, clientesUnicos: Object.keys(conteo[k].clientes).length };
+        }).sort(function(a,b){ return b.veces - a.veces; });
+        if(!p.length){
+            const msg = _demandaFiltro === 'hoy' ? 'Sin pedidos de hoy.' : (_demandaFiltro === 'anteriores' ? 'Sin pedidos de días anteriores.' : 'Sin registros aún.');
+            cont.innerHTML = '<p class="text-slate-400 py-3 text-center">'+msg+'</p>';
+            return;
+        }
+        cont.innerHTML = p.map(function(x, i){
+            return '<div class="flex items-center justify-between border-b border-slate-100 py-2">'
+                + '<span class="font-bold text-slate-700 truncate pr-2">'+(i+1)+'. '+x.producto+'</span>'
+                + '<span class="text-amber-600 font-black whitespace-nowrap">'+x.veces+'× <span class="text-[9px] text-slate-400">('+x.clientesUnicos+' cli)</span></span>'
+                + '</div>';
+        }).join('');
     }
 
     // ===== FASE 3: corregir teléfono desde la ficha (en cualquier momento) =====
