@@ -88,7 +88,7 @@
             <h1 class="text-5xl font-black tracking-tighter italic mb-2 uppercase">CRM <span class="text-blue-400">CDES</span></h1>
             <p class="text-slate-400 text-[10px] font-bold tracking-[0.4em] uppercase" id="user-info">Conectando...</p>
             
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mt-8">
+            <div id="grid-header-kpis" class="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mt-8">
                 <div class="bg-white/5 p-4 rounded-3xl border border-white/10 backdrop-blur-md">
                     <p class="text-[9px] text-blue-400 font-black uppercase mb-1">Ventas Históricas</p>
                     <p id="kpi-ventas" class="text-xl md:text-2xl font-black">--</p>
@@ -1301,6 +1301,9 @@
                     document.getElementById('panel-admin').classList.remove('hidden');
                     document.getElementById('tab-reportes').innerText = "📈 AUDITORÍA";
                     document.getElementById('cockpit-label').innerText = "Meta del Equipo Hoy";
+                    // Admin no muestra la tarjeta "Puntos del Mes": pasar la rejilla de 4 a 3 columnas para que las 3 tarjetas queden centradas
+                    const ghk = document.getElementById('grid-header-kpis');
+                    if (ghk) { ghk.classList.remove('grid-cols-2', 'md:grid-cols-4'); ghk.classList.add('grid-cols-1', 'sm:grid-cols-3'); }
                 } else {
                     document.getElementById('tab-reportes').innerText = "📊 MI RESUMEN";
                     document.getElementById('bloque-estado-conexion').classList.add('hidden');
