@@ -462,7 +462,7 @@
                         <span class="text-lg">📦</span>
                         <h3 class="text-sm font-black text-slate-800">Demanda no cubierta</h3>
                     </div>
-                    <p class="text-[10px] text-slate-400 mb-2">Productos más pedidos que no teníamos (para compras).</p>
+                    <p class="text-[10px] text-slate-400 mb-2">Cada producto que no teníamos, con el cliente y quién lo reportó.</p>
                     <div id="demanda-filtros" class="flex gap-1 mb-3">
                         <button type="button" data-f="hoy" onclick="setDemandaFiltro('hoy')" class="text-[10px] font-black px-3 py-1 rounded-full bg-slate-100 text-slate-500">Hoy</button>
                         <button type="button" data-f="anteriores" onclick="setDemandaFiltro('anteriores')" class="text-[10px] font-black px-3 py-1 rounded-full bg-slate-100 text-slate-500">Anteriores</button>
@@ -3713,28 +3713,18 @@
         let items = _demandaItems;
         if (_demandaFiltro === 'hoy') items = items.filter(function(x){ return (x.fecha || '').substring(0,10) === hoy; });
         else if (_demandaFiltro === 'anteriores') items = items.filter(function(x){ return (x.fecha || '').substring(0,10) !== hoy; });
-        // Agregar por producto (mismo criterio que obtenerResumenDemanda, pero ya filtrado por fecha)
-        const conteo = {};
-        items.forEach(function(x){
-            const prod = (x.producto || '').trim();
-            if(!prod) return;
-            const k = prod.toLowerCase();
-            if(!conteo[k]) conteo[k] = { producto: prod, veces: 0, clientes: {} };
-            conteo[k].veces++;
-            if(x.codigo) conteo[k].clientes[x.codigo] = true;
-        });
-        const p = Object.keys(conteo).map(function(k){
-            return { producto: conteo[k].producto, veces: conteo[k].veces, clientesUnicos: Object.keys(conteo[k].clientes).length };
-        }).sort(function(a,b){ return b.veces - a.veces; });
-        if(!p.length){
+        if(!items.length){
             const msg = _demandaFiltro === 'hoy' ? 'Sin pedidos de hoy.' : (_demandaFiltro === 'anteriores' ? 'Sin pedidos de días anteriores.' : 'Sin registros aún.');
             cont.innerHTML = '<p class="text-slate-400 py-3 text-center">'+msg+'</p>';
             return;
         }
-        cont.innerHTML = p.map(function(x, i){
-            return '<div class="flex items-center justify-between border-b border-slate-100 py-2">'
-                + '<span class="font-bold text-slate-700 truncate pr-2">'+(i+1)+'. '+x.producto+'</span>'
-                + '<span class="text-amber-600 font-black whitespace-nowrap">'+x.veces+'× <span class="text-[9px] text-slate-400">('+x.clientesUnicos+' cli)</span></span>'
+        cont.innerHTML = items.map(function(x){
+            let extra = [x.marca, x.cantidad ? ('cant: '+x.cantidad) : ''].filter(Boolean).join(' · ');
+            return '<div class="border-b border-slate-100 py-2">'
+                + '<div class="flex items-center justify-between gap-2"><span class="font-black text-amber-700 truncate pr-2">'+x.producto+'</span><span class="text-[9px] text-slate-400 whitespace-nowrap">'+x.fecha+'</span></div>'
+                + '<p class="text-[10px] text-slate-600 font-bold">'+x.codigo+' · '+x.cliente+'</p>'
+                + (extra ? '<p class="text-[10px] text-slate-400">'+extra+'</p>' : '')
+                + '<p class="text-[10px] text-slate-400">👤 '+x.vendedor+'</p>'
                 + '</div>';
         }).join('');
     }
