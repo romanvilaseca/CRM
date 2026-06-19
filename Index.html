@@ -790,13 +790,6 @@
                   <button onclick="toggleCorreccionFicha()" class="mt-2 text-[9px] font-black text-rose-600 uppercase tracking-widest hover:text-rose-800 hover:bg-rose-50 px-3 py-1 rounded-full transition-all">📞 Corregir teléfono</button>
                   <div id="bloque-correccion-ficha" class="hidden w-full mt-3 text-left">
                       <input id="fic-telalt" type="tel" inputmode="numeric" class="w-full p-2.5 bg-white rounded-xl text-xs border border-rose-200 outline-none focus:ring-2 focus:ring-rose-400 mb-2" placeholder="Teléfono correcto (8 dígitos)">
-                      <select id="fic-estado" class="w-full p-2.5 bg-white rounded-xl text-xs border border-rose-200 outline-none focus:ring-2 focus:ring-rose-400 mb-2 font-bold text-slate-600">
-                          <option value="">Estado del cliente (opcional)</option>
-                          <option value="Activo">Activo</option>
-                          <option value="Inactivo">Inactivo</option>
-                          <option value="Cambió de razón social">Cambió de razón social</option>
-                          <option value="No localizable">No localizable</option>
-                      </select>
                       <button id="btn-fic-guardar" onclick="guardarCorreccionFicha()" class="w-full bg-rose-600 text-white py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-rose-700 active:scale-95 transition-all">Guardar corrección para SAP</button>
                   </div>
               </div>
@@ -3741,11 +3734,10 @@
         const nom = document.getElementById('mNom').innerText;
         const telActual = document.getElementById('mTel1').innerText;
         const telAlt = (document.getElementById('fic-telalt').value || '').trim();
-        const estado = (document.getElementById('fic-estado').value || '').trim();
 
-        if (!telAlt && !estado) { alert("Escribe el teléfono correcto o elige un estado del cliente."); return; }
+        if (!telAlt) { alert("Escribe el teléfono correcto (8 dígitos)."); return; }
         const telNum = telAlt.replace(/[^0-9]/g, '').replace(/^503/, '');
-        if (telAlt && telNum.length !== 8) { alert("El teléfono correcto debe tener 8 dígitos (El Salvador)."); return; }
+        if (telNum.length !== 8) { alert("El teléfono correcto debe tener 8 dígitos (El Salvador)."); return; }
 
         btn.innerText = "GUARDANDO..."; btn.disabled = true;
         google.script.run.withSuccessHandler(function(res){
@@ -3754,7 +3746,6 @@
                 const bono = (res && res.puntoCorreccion) ? (" Ganaste +" + res.puntoCorreccion + " punto por corregir el teléfono.") : "";
                 alert("✅ Corrección registrada. Quedó como tarea pendiente para SAP." + bono);
                 document.getElementById('fic-telalt').value = "";
-                document.getElementById('fic-estado').value = "";
                 toggleCorreccionFicha();
                 if (res.puntoCorreccion && typeof cargarCockpit === 'function') { cargarCockpit(); cargarUltimaInteraccion(); }
             } else {
@@ -3765,7 +3756,7 @@
             alert("Error de red al guardar la corrección.");
         }).guardarCorreccionContacto({
             codigo: cod, nombre: nom, telActual: telActual,
-            telAlternativo: telAlt, validado: telAlt ? 'Incorrecto' : '', estadoCliente: estado,
+            telAlternativo: telAlt, validado: 'Incorrecto', estadoCliente: '',
             notas: 'Corrección desde ficha de cliente'
         }, usuarioLogueado);
     }
