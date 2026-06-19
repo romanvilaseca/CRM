@@ -102,6 +102,16 @@ function guardarConfigPuntos(lista) {
   }
 }
 
+// One-shot 2026-06-18: incentivar el registro de baja interaccion
+// (antes valian 0; ahora 0.25 y 0.10 respectivamente).
+// Idempotente: ejecutar una vez desde el editor y opcionalmente borrar.
+function ajustarPuntosBajaInteraccion20260618() {
+  return guardarConfigPuntos([
+    { resultado: 'Mensaje enviado sin respuesta', puntos: 0.25 },
+    { resultado: 'No se obtuvo contacto', puntos: 0.10 }
+  ]);
+}
+
 // Asegura los encabezados de las columnas nuevas en VISITAS (idempotente).
 function inicializarColumnasVisitas() {
   const ss = SpreadsheetApp.openById(SHEET_ID_CRM);
@@ -120,6 +130,72 @@ function inicializarFase1() {
 }
 
 // Suma de puntos del dia para un vendedor (o de todo el equipo si email es null).
+function contarPuntosMes(emailFiltro, yyyymmOpcional) {
+  const ss = SpreadsheetApp.openById(SHEET_ID_CRM);
+  const h = ss.getSheetByName('VISITAS');
+  if (!h || h.getLastRow() <= 1) return 0;
+  const hoy = new Date();
+  const targetYear = yyyymmOpcional ? parseInt(String(yyyymmOpcional).substring(0, 4), 10) : hoy.getFullYear();
+  const targetMonth = yyyymmOpcional ? parseInt(String(yyyymmOpcional).substring(5, 7), 10) : (hoy.getMonth() + 1);
+  const data = h.getDataRange().getValues();
+  const emailLower = emailFiltro ? String(emailFiltro).trim().toLowerCase() : null;
+  let suma = 0;
+  for (let i = 1; i < data.length; i++) {
+    let fVal = data[i][0];
+    let y, m;
+    if (fVal instanceof Date) {
+      y = fVal.getFullYear();
+      m = fVal.getMonth() + 1;
+    } else {
+      const fStr = String(fVal).trim();
+      if (fStr.length < 10) continue;
+      m = parseInt(fStr.substring(3, 5), 10);
+      y = parseInt(fStr.substring(6, 10), 10);
+    }
+    if (y !== targetYear || m !== targetMonth) continue;
+    if (emailLower && String(data[i][1]).trim().toLowerCase() !== emailLower) continue;
+    let p = parseFloat(data[i][8]);
+    if (!isNaN(p)) suma += p;
+  }
+  return Math.round(suma * 100) / 100;
+}
+
+function contarDiasHabilesMes(year, month) {
+  // month es 1-indexed. Cuenta lunes a sabado (excluye domingos).
+  let count = 0;
+  const d = new Date(year, month - 1, 1);
+  while (d.getMonth() === month - 1) {
+    if (d.getDay() !== 0) count++;
+    d.setDate(d.getDate() + 1);
+  }
+  return count;
+}
+
+function obtenerCockpitMes(emailUsuario, yyyymmOpcional) {
+  try {
+    const email = String(emailUsuario || "").trim().toLowerCase();
+    if (!email) return { exito: false, mensaje: "Email vacio", meta: 0, puntos: 0 };
+    const metas = obtenerMetasUsuario(email);
+    const metaDiaria = metas.puntos > 0 ? metas.puntos : 10;
+    const hoy = new Date();
+    const targetYear = yyyymmOpcional ? parseInt(String(yyyymmOpcional).substring(0, 4), 10) : hoy.getFullYear();
+    const targetMonth = yyyymmOpcional ? parseInt(String(yyyymmOpcional).substring(5, 7), 10) : (hoy.getMonth() + 1);
+    const diasHabiles = contarDiasHabilesMes(targetYear, targetMonth);
+    const metaMes = metaDiaria * diasHabiles;
+    const puntos = contarPuntosMes(email, yyyymmOpcional);
+    return {
+      exito: true,
+      meta: metaMes,
+      puntos: puntos,
+      metaDiaria: metaDiaria,
+      diasHabiles: diasHabiles,
+      yyyymm: targetYear + '-' + String(targetMonth).padStart(2, '0')
+    };
+  } catch (e) {
+    return { exito: false, mensaje: e.message, meta: 0, puntos: 0 };
+  }
+}
+
 function contarPuntosHoy(emailFiltro, fechaStrOpcional) {
   const ss = SpreadsheetApp.openById(SHEET_ID_CRM);
   const h = ss.getSheetByName('VISITAS');
@@ -691,16 +767,47 @@ function verificarAccesoUsuario(emailLogin, pinLogin) {
 function obtenerCockpitDiario(emailUsuario, fechaStrOpcional) {
   try {
     const email = String(emailUsuario || "").trim().toLowerCase();
-    if (!email) return { exito: false, mensaje: "Email vacío", meta: 10, atendidos: 0 };
+    if (!email) return { exito: false, mensaje: "Email vacío", meta: 10, atendidos: 0, clientesAtendidos: 0 };
 
     // C3: el cockpit mide PUNTOS. Meta = Meta puntos de METAS_USUARIO.
     const metas = obtenerMetasUsuario(email);
     const meta = metas.puntos > 0 ? metas.puntos : 10;
     const atendidos = contarPuntosHoy(email, fechaStrOpcional);
-    return { exito: true, meta: meta, atendidos: atendidos };
+    const clientesAtendidos = contarClientesAtendidosHoy(email, fechaStrOpcional);
+    return { exito: true, meta: meta, atendidos: atendidos, clientesAtendidos: clientesAtendidos };
   } catch (e) {
-    return { exito: false, mensaje: e.message, meta: 10, atendidos: 0 };
+    return { exito: false, mensaje: e.message, meta: 10, atendidos: 0, clientesAtendidos: 0 };
   }
+}
+
+// Clientes UNICOS atendidos hoy con interaccion positiva (excluye sin contacto,
+// sin respuesta, y bonus por correccion de telefono).
+function contarClientesAtendidosHoy(emailFiltro, fechaStrOpcional) {
+  const ss = SpreadsheetApp.openById(SHEET_ID_CRM);
+  const h = ss.getSheetByName('VISITAS');
+  if (!h || h.getLastRow() <= 1) return 0;
+  const fechaObjetivo = fechaStrOpcional || Utilities.formatDate(new Date(), "GMT-6", "dd/MM/yyyy");
+  const data = h.getDataRange().getValues();
+  const emailLower = emailFiltro ? String(emailFiltro).trim().toLowerCase() : null;
+  const EXCLUIDOS = {
+    'No se obtuvo contacto': true,
+    'Mensaje enviado sin respuesta': true,
+    'Corrección de teléfono': true
+  };
+  const codigos = {};
+  for (let i = 1; i < data.length; i++) {
+    let fVal = data[i][0];
+    let fStr = (fVal instanceof Date)
+      ? Utilities.formatDate(fVal, "GMT-6", "dd/MM/yyyy")
+      : String(fVal).trim().substring(0, 10);
+    if (fStr !== fechaObjetivo) continue;
+    if (emailLower && String(data[i][1]).trim().toLowerCase() !== emailLower) continue;
+    let resultado = String(data[i][7] || '').trim();
+    if (EXCLUIDOS[resultado]) continue;
+    let cod = String(data[i][2]).trim().replace(/'/g, "");
+    if (cod) codigos[cod] = true;
+  }
+  return Object.keys(codigos).length;
 }
 
 function contarClientesUnicosHoy(emailFiltro, fechaStrOpcional) {
@@ -2060,15 +2167,22 @@ function otorgarPuntoCorreccion(codigo, nombre, telNuevo, correoVendedor) {
 function obtenerTareasSAP() {
   try {
     const h = obtenerHojaCorrecciones();
-    if (h.getLastRow() <= 1) return { exito: true, tareas: [] };
+    if (h.getLastRow() <= 1) return { exito: true, tareas: [], totalHoy: 0 };
     const data = h.getDataRange().getValues();
+    const hoyStr = Utilities.formatDate(new Date(), "GMT-6", "dd/MM/yyyy");
     const tareas = [];
+    let totalHoy = 0;
     for (let i = 1; i < data.length; i++) {
       let estadoSync = String(data[i][9] || '').trim();
       if (estadoSync && estadoSync !== 'Pendiente revisión') continue;
+      let fechaRaw = data[i][0];
+      let fechaFmt = (fechaRaw instanceof Date) ? Utilities.formatDate(fechaRaw, "GMT-6", "dd/MM/yyyy HH:mm") : String(fechaRaw);
+      let esHoy = fechaFmt.substring(0, 10) === hoyStr;
+      if (esHoy) totalHoy++;
       tareas.push({
         fila: i + 1,
-        fecha: (data[i][0] instanceof Date) ? Utilities.formatDate(data[i][0], "GMT-6", "dd/MM/yyyy HH:mm") : String(data[i][0]),
+        fecha: fechaFmt,
+        esHoy: esHoy,
         vendedor: String(data[i][1] || ''),
         codigo: String(data[i][2] || ''),
         cliente: String(data[i][3] || ''),
@@ -2079,9 +2193,10 @@ function obtenerTareasSAP() {
         notas: String(data[i][8] || '')
       });
     }
-    return { exito: true, tareas: tareas };
+    tareas.sort(function(a, b) { return (b.esHoy ? 1 : 0) - (a.esHoy ? 1 : 0); });
+    return { exito: true, tareas: tareas, totalHoy: totalHoy };
   } catch (e) {
-    return { exito: false, mensaje: e.message, tareas: [] };
+    return { exito: false, mensaje: e.message, tareas: [], totalHoy: 0 };
   }
 }
 
