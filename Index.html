@@ -49,10 +49,10 @@
         <p id="texto-pasos-carga" class="text-[10px] text-blue-200 font-bold uppercase tracking-widest animate-pulse">Analizando base de datos...</p>
     </div>
 
-    <div id="tip-carga" class="hidden absolute bottom-20 left-0 right-0 flex justify-center px-6">
-        <div class="bg-white/10 backdrop-blur-sm border border-white/20 rounded-2xl px-5 py-3 max-w-sm text-center transition-opacity duration-700 opacity-0" id="tip-carga-inner">
-            <p class="text-[10px] text-blue-100 font-black uppercase tracking-widest mb-1">💡 TIP</p>
-            <p id="tip-carga-texto" class="text-[12px] text-white font-semibold leading-snug"></p>
+    <div id="tip-carga" class="hidden absolute bottom-12 md:bottom-16 left-0 right-0 flex justify-center px-6">
+        <div class="bg-white/20 backdrop-blur-md border border-white/40 rounded-3xl px-6 py-5 md:px-8 md:py-6 max-w-md text-center transition-opacity duration-500 opacity-0 shadow-2xl shadow-black/30" id="tip-carga-inner">
+            <p class="text-xs md:text-sm text-amber-300 font-black uppercase tracking-[0.2em] mb-2">💡 TIP DEL DÍA</p>
+            <p id="tip-carga-texto" class="text-sm md:text-lg text-white font-bold leading-relaxed"></p>
         </div>
     </div>
   </div>
@@ -903,7 +903,7 @@
                   </label>
                   <label class="relative cursor-pointer flex-1 min-w-[120px]">
                       <input type="radio" name="tipoInteraccion" value="Vino a Sala de Ventas" class="peer sr-only">
-                      <div class="p-3 text-center bg-slate-50 border border-slate-200 rounded-2xl text-[10px] md:text-[11px] font-bold text-slate-500 transition-all peer-checked:bg-blue-100 peer-checked:border-blue-500 peer-checked:text-blue-800">🏪 Mostrador</div>
+                      <div class="p-3 text-center bg-slate-50 border border-slate-200 rounded-2xl text-[10px] md:text-[11px] font-bold text-slate-500 transition-all peer-checked:bg-blue-100 peer-checked:border-blue-500 peer-checked:text-blue-800">🏪 En sucursal</div>
                   </label>
               </div>
 
@@ -971,8 +971,8 @@
               <div class="flex items-end gap-2 flex-wrap">
                   <label class="text-center"><span class="block text-[9px] font-black text-slate-400 uppercase">📱 WA</span><input id="meta-todos-whatsapp" type="number" min="0" step="0.5" value="30" class="w-16 p-1.5 bg-white rounded-lg text-xs border border-blue-200 outline-none text-center font-bold"></label>
                   <label class="text-center"><span class="block text-[9px] font-black text-slate-400 uppercase">📞 Llam.</span><input id="meta-todos-llamadas" type="number" min="0" step="0.5" value="30" class="w-16 p-1.5 bg-white rounded-lg text-xs border border-blue-200 outline-none text-center font-bold"></label>
-                  <label class="text-center"><span class="block text-[9px] font-black text-slate-400 uppercase">🏪 Pres.</span><input id="meta-todos-presencial" type="number" min="0" step="0.5" value="10" class="w-16 p-1.5 bg-white rounded-lg text-xs border border-blue-200 outline-none text-center font-bold"></label>
-                  <label class="text-center"><span class="block text-[9px] font-black text-slate-400 uppercase">🚗 Visitas</span><input id="meta-todos-visitas" type="number" min="0" step="0.5" value="10" class="w-16 p-1.5 bg-white rounded-lg text-xs border border-blue-200 outline-none text-center font-bold"></label>
+                  <label class="text-center"><span class="block text-[9px] font-black text-slate-400 uppercase">🏪 Sucursal</span><input id="meta-todos-presencial" type="number" min="0" step="0.5" value="10" class="w-16 p-1.5 bg-white rounded-lg text-xs border border-blue-200 outline-none text-center font-bold"></label>
+                  <label class="text-center"><span class="block text-[9px] font-black text-slate-400 uppercase">🚗 Visita</span><input id="meta-todos-visitas" type="number" min="0" step="0.5" value="10" class="w-16 p-1.5 bg-white rounded-lg text-xs border border-blue-200 outline-none text-center font-bold"></label>
                   <button onclick="aplicarMetasTodos()" class="bg-blue-600 text-white px-3 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-blue-700 active:scale-95 transition-all">Aplicar a todos</button>
                   <button onclick="restaurarMetasDefecto()" class="bg-slate-200 text-slate-600 px-3 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-300 active:scale-95 transition-all" title="Volver a 30/30/10/10">↺ 30/30/10/10</button>
               </div>
@@ -980,7 +980,7 @@
           <div class="overflow-x-auto">
               <table class="w-full text-left">
                   <thead><tr class="text-[9px] text-slate-400 uppercase tracking-widest border-b border-slate-200">
-                      <th class="py-2 px-1">Vendedor</th><th class="py-2 px-1 text-center">📱 WA</th><th class="py-2 px-1 text-center">📞 Llam.</th><th class="py-2 px-1 text-center">🏪 Pres.</th><th class="py-2 px-1 text-center">🚗 Visitas</th><th class="py-2 px-1"></th>
+                      <th class="py-2 px-1">Vendedor</th><th class="py-2 px-1 text-center">📱 WA</th><th class="py-2 px-1 text-center">📞 Llam.</th><th class="py-2 px-1 text-center">🏪 Sucursal</th><th class="py-2 px-1 text-center">🚗 Visita</th><th class="py-2 px-1"></th>
                   </tr></thead>
                   <tbody id="metas-tbody"><tr><td colspan="6" class="text-center text-xs text-slate-400 py-6 animate-pulse">Cargando…</td></tr></tbody>
               </table>
@@ -1495,10 +1495,10 @@
             + '<div class="grid grid-cols-2 md:grid-cols-4 gap-3">'
             + _indCard('WhatsApp','📱', h.whatsapp, s.whatsapp, m.whatsapp, meta.whatsapp)
             + _indCard('Llamadas','📞', h.llamadas, s.llamadas, m.llamadas, meta.llamadas)
-            + _indCard('Presencial','🏪', h.presencial, s.presencial, m.presencial, meta.presencial)
-            + _indCard('Visitas','🚗', h.visitas, s.visitas, m.visitas, meta.visitas)
+            + _indCard('En sucursal','🏪', h.presencial, s.presencial, m.presencial, meta.presencial)
+            + _indCard('Visita al cliente','🚗', h.visitas, s.visitas, m.visitas, meta.visitas)
             + '</div>'
-            + '<p class="text-[9px] text-slate-400 mt-3">Cada canal acumula <b>puntos según el resultado</b> de tus interacciones. Presencial = clientes atendidos en Mostrador.</p>';
+            + '<p class="text-[9px] text-slate-400 mt-3">Cada canal acumula <b>puntos según el resultado</b> de tus interacciones. En sucursal = clientes atendidos en Mostrador; Visita al cliente = visitas presenciales.</p>';
     }
 
     function _celdaCanal(hoy, meta){
@@ -1525,7 +1525,7 @@
         }).join('');
         return '<div class="overflow-x-auto"><table class="w-full text-left">'
             + '<thead><tr class="text-[9px] text-slate-400 uppercase tracking-widest border-b border-slate-200">'
-            + '<th class="py-2 px-2">Asesor</th><th class="py-2 px-2 text-center">Total</th><th class="py-2 px-2 text-center">📱 WA</th><th class="py-2 px-2 text-center">📞 Llam.</th><th class="py-2 px-2 text-center">🏪 Pres.</th><th class="py-2 px-2 text-center">🚗 Visitas</th></tr></thead>'
+            + '<th class="py-2 px-2">Asesor</th><th class="py-2 px-2 text-center">Total</th><th class="py-2 px-2 text-center">📱 WA</th><th class="py-2 px-2 text-center">📞 Llam.</th><th class="py-2 px-2 text-center">🏪 Sucursal</th><th class="py-2 px-2 text-center">🚗 Visita</th></tr></thead>'
             + '<tbody>'+filas+'</tbody></table>'
             + '<p class="text-[9px] text-slate-400 mt-3">Cada columna son <b>puntos por canal</b> (logrado / meta). Toca un vendedor para ver el desglose. Edita las metas con el botón ⚙️ Ajustar metas.</p></div>';
     }
@@ -1622,8 +1622,8 @@
         }
         cont.innerHTML = card('WhatsApp','📱', h.whatsapp, meta.whatsapp)
             + card('Llamadas','📞', h.llamadas, meta.llamadas)
-            + card('Presencial','🏪', h.presencial, meta.presencial)
-            + card('Visitas','🚗', h.visitas, meta.visitas);
+            + card('En sucursal','🏪', h.presencial, meta.presencial)
+            + card('Visita al cliente','🚗', h.visitas, meta.visitas);
         cont.classList.remove('hidden');
     }
 
@@ -2250,11 +2250,17 @@
     function mostrarTipCarga(indice) {
         let inner = document.getElementById('tip-carga-inner');
         let texto = document.getElementById('tip-carga-texto');
+        // Primer tip: aparece de inmediato (no hay texto previo que ocultar).
+        if (!texto.innerText) {
+            texto.innerText = TIPS_CARGA[indice % TIPS_CARGA.length];
+            inner.style.opacity = '1';
+            return;
+        }
         inner.style.opacity = '0';
         setTimeout(function() {
             texto.innerText = TIPS_CARGA[indice % TIPS_CARGA.length];
             inner.style.opacity = '1';
-        }, 700);
+        }, 500);
     }
 
     function iniciarAnimacionProgreso() {
@@ -2288,7 +2294,7 @@
             if(progreso > 80 && paso === 2) { texto.innerText = pasos[3]; paso++; }
         }, 1000);
 
-        // Tips rotativos — aparecen a los 2 seg y cambian cada 4 seg
+        // Tips rotativos — aparecen casi de inmediato y cambian cada 5 seg
         let tipIndice = Math.floor(Math.random() * TIPS_CARGA.length);
         let tipContenedor = document.getElementById('tip-carga');
         tipContenedor.classList.remove('hidden');
@@ -2299,8 +2305,8 @@
                 do { siguiente = Math.floor(Math.random() * TIPS_CARGA.length); } while (siguiente === tipIndice && TIPS_CARGA.length > 1);
                 tipIndice = siguiente;
                 mostrarTipCarga(tipIndice);
-            }, 6000);
-        }, 2000);
+            }, 5000);
+        }, 400);
     }
 
     function detenerAnimacionProgreso() {
