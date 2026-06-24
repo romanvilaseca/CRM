@@ -40,7 +40,7 @@ Pedido/venta cerrada=3, Cotización=1, Pedido pendiente=1, Contacto efectivo=1, 
 ## Despliegue (IMPORTANTE)
 - `clasp run` NO funciona (proyecto usa GCP por defecto; requiere habilitar API en navegador). Ver memoria `crm-deploy-clasp-process`.
 - Para correr funciones de servidor una vez: técnica de **disparador temporal en doGet + despliegue web temporal + curl + borrar**.
-- Publicar a usuarios: `clasp create-version` → `clasp update-deployment <ID> --versionNumber N`. El deployment publicado (la URL que usan los 8) es `AKfycbzHuce-FNFVOD0Yq2vbyHbokzAELgsDRIp7zwwPbRVZWtGwBV0adgpsGas9KlaTXGwEVw` (última versión publicada **@115**). Probar antes: deployment @HEAD `AKfycby_YSlZF2UKH8fkKSjmhFaLxzmSeYQ_8SLHyUbvqGzz` (URL /dev). El sitio `www.corpodent.net/crm` carga el deployment publicado en un **iframe** (probar /dev requiere abrirlo directo, no por el iframe).
+- Publicar a usuarios: `clasp create-version` → `clasp update-deployment <ID> --versionNumber N`. El deployment publicado (la URL que usan los 8) es `AKfycbzHuce-FNFVOD0Yq2vbyHbokzAELgsDRIp7zwwPbRVZWtGwBV0adgpsGas9KlaTXGwEVw` (última versión publicada **@138 = "v2.2"**, 24-jun-2026). Probar antes: deployment @HEAD `AKfycby_YSlZF2UKH8fkKSjmhFaLxzmSeYQ_8SLHyUbvqGzz` (URL /dev). El sitio `www.corpodent.net/crm` carga el deployment publicado en un **iframe** (probar /dev requiere abrirlo directo, no por el iframe). El rótulo de versión del login (`<span id="login-version">`) es texto fijo: actualizar a mano al publicar.
 - Verificar en vivo: `curl .../exec?cb=<random>` (usar cache-buster; el borde de Google cachea tras redeploy).
 - GitHub: `https://github.com/romanvilaseca/CRM.git` (rama `main`). Identidad git: `Roman Vilaseca <romanvilaseca@gmail.com>`.
 
