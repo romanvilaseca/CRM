@@ -140,6 +140,9 @@
                     <p id="kpi-fecha-clientes" class="text-[8px] text-slate-500 mt-1">--</p>
                 </div>
             </div>
+
+            <!-- Indicadores de puntos por canal (solo vendedor) -->
+            <div id="header-canales" class="hidden grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mt-3 md:mt-4"></div>
         </div>
     </header>
 
@@ -962,18 +965,22 @@
               <h3 class="text-xl font-black text-slate-800">⚙️ Metas por vendedor</h3>
               <button onclick="cerrarModalMetas()" class="text-slate-400 hover:text-slate-700 text-2xl font-black leading-none">&times;</button>
           </div>
-          <p class="text-[11px] text-slate-400 mb-4">Define la meta diaria de cada quien. Puntos usa la ponderación por resultado. Deja 0 en un canal para "sin meta".</p>
-          <div class="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-2xl px-4 py-3 mb-4">
-              <span class="text-[11px] font-bold text-blue-700">Poner la misma meta de puntos a todos:</span>
-              <div class="flex items-center gap-2">
-                  <input id="meta-todos-valor" type="number" min="0" step="1" value="30" class="w-20 p-2 bg-white rounded-xl text-sm border border-blue-200 outline-none text-center font-black">
-                  <button onclick="ponerMetaPuntosTodos()" class="bg-blue-600 text-white px-3 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-blue-700 active:scale-95 transition-all">Aplicar</button>
+          <p class="text-[11px] text-slate-400 mb-4">Define la meta diaria de <b>puntos por canal</b> de cada quien. Cada canal acumula puntos según el resultado de las interacciones. Deja 0 en un canal para "sin meta".</p>
+          <div class="bg-blue-50 border border-blue-200 rounded-2xl px-4 py-3 mb-4">
+              <span class="text-[11px] font-bold text-blue-700 block mb-2">Aplicar las mismas metas a TODOS los vendedores:</span>
+              <div class="flex items-end gap-2 flex-wrap">
+                  <label class="text-center"><span class="block text-[9px] font-black text-slate-400 uppercase">📱 WA</span><input id="meta-todos-whatsapp" type="number" min="0" step="0.5" value="30" class="w-16 p-1.5 bg-white rounded-lg text-xs border border-blue-200 outline-none text-center font-bold"></label>
+                  <label class="text-center"><span class="block text-[9px] font-black text-slate-400 uppercase">📞 Llam.</span><input id="meta-todos-llamadas" type="number" min="0" step="0.5" value="30" class="w-16 p-1.5 bg-white rounded-lg text-xs border border-blue-200 outline-none text-center font-bold"></label>
+                  <label class="text-center"><span class="block text-[9px] font-black text-slate-400 uppercase">🏪 Pres.</span><input id="meta-todos-presencial" type="number" min="0" step="0.5" value="10" class="w-16 p-1.5 bg-white rounded-lg text-xs border border-blue-200 outline-none text-center font-bold"></label>
+                  <label class="text-center"><span class="block text-[9px] font-black text-slate-400 uppercase">🚗 Visitas</span><input id="meta-todos-visitas" type="number" min="0" step="0.5" value="10" class="w-16 p-1.5 bg-white rounded-lg text-xs border border-blue-200 outline-none text-center font-bold"></label>
+                  <button onclick="aplicarMetasTodos()" class="bg-blue-600 text-white px-3 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-blue-700 active:scale-95 transition-all">Aplicar a todos</button>
+                  <button onclick="restaurarMetasDefecto()" class="bg-slate-200 text-slate-600 px-3 py-2 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-slate-300 active:scale-95 transition-all" title="Volver a 30/30/10/10">↺ 30/30/10/10</button>
               </div>
           </div>
           <div class="overflow-x-auto">
               <table class="w-full text-left">
                   <thead><tr class="text-[9px] text-slate-400 uppercase tracking-widest border-b border-slate-200">
-                      <th class="py-2 px-1">Vendedor</th><th class="py-2 px-1 text-center">Puntos</th><th class="py-2 px-1 text-center">Llam.</th><th class="py-2 px-1 text-center">WA</th><th class="py-2 px-1 text-center">Visitas</th><th class="py-2 px-1"></th>
+                      <th class="py-2 px-1">Vendedor</th><th class="py-2 px-1 text-center">📱 WA</th><th class="py-2 px-1 text-center">📞 Llam.</th><th class="py-2 px-1 text-center">🏪 Pres.</th><th class="py-2 px-1 text-center">🚗 Visitas</th><th class="py-2 px-1"></th>
                   </tr></thead>
                   <tbody id="metas-tbody"><tr><td colspan="6" class="text-center text-xs text-slate-400 py-6 animate-pulse">Cargando…</td></tr></tbody>
               </table>
@@ -1458,26 +1465,47 @@
         let pct = meta > 0 ? Math.round((hoy/meta)*100) : null;
         let cumplido = (meta > 0 && hoy >= meta);
         let color = !meta ? 'text-slate-500' : cumplido ? 'text-emerald-600' : (pct>=50?'text-amber-500':'text-rose-500');
+        let barColor = cumplido ? 'bg-emerald-500' : (pct>=50 ? 'bg-amber-400' : 'bg-rose-400');
+        let pctBar = meta > 0 ? Math.min(100, pct) : 0;
         let badge = !meta ? '<span class="text-[8px] font-bold text-slate-300 uppercase">sin meta</span>'
                   : cumplido ? '<span class="text-[8px] font-black text-emerald-600 uppercase">✓ cumplida</span>'
                   : '<span class="text-[8px] font-black '+color+' uppercase">'+pct+'%</span>';
         let metaTxt = meta > 0 ? (' / ' + meta) : '';
+        let barra = meta > 0
+            ? '<div class="mt-2 h-1.5 bg-slate-200 rounded-full overflow-hidden"><div class="h-full '+barColor+' rounded-full transition-all" style="width:'+pctBar+'%"></div></div>'
+            : '<div class="mt-2 h-1.5"></div>';
         return '<div class="bg-slate-50 border border-slate-200 rounded-2xl p-3 text-center">'
             + '<p class="text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">'+emoji+' '+nombre+'</p>'
             + '<p class="text-lg font-black '+color+' leading-none">'+hoy+'<span class="text-[10px] text-slate-400">'+metaTxt+'</span></p>'
             + '<div class="mt-1 h-3">'+badge+'</div>'
+            + barra
             + '<p class="text-[8px] text-slate-400 font-bold mt-2">Sem '+sem+' · Mes '+mes+'</p>'
             + '</div>';
     }
 
     function renderRendimientoUsuario(res){
         const h=res.hoy, s=res.semana, m=res.mes, meta=res.metas;
-        return '<div class="grid grid-cols-2 md:grid-cols-4 gap-3">'
-            + _indCard('Puntos','⭐', h.puntos, s.puntos, m.puntos, meta.puntos)
-            + _indCard('Llamadas','📞', h.llamadas, s.llamadas, m.llamadas, meta.llamadas)
+        let totMeta = (meta.whatsapp||0)+(meta.llamadas||0)+(meta.presencial||0)+(meta.visitas||0);
+        let totPct = totMeta>0 ? Math.round((h.puntos/totMeta)*100) : 0;
+        let totCol = h.puntos>=totMeta ? 'text-emerald-600' : (totPct>=50?'text-amber-500':'text-rose-500');
+        return '<div class="bg-blue-50 border border-blue-200 rounded-2xl p-3 mb-3 flex items-center justify-between">'
+            +   '<span class="text-[10px] font-black text-blue-700 uppercase tracking-wider">⭐ Total de puntos hoy</span>'
+            +   '<span class="text-sm font-black '+totCol+'">'+h.puntos+' / '+totMeta+' <span class="text-[10px]">('+totPct+'%)</span></span>'
+            + '</div>'
+            + '<div class="grid grid-cols-2 md:grid-cols-4 gap-3">'
             + _indCard('WhatsApp','📱', h.whatsapp, s.whatsapp, m.whatsapp, meta.whatsapp)
+            + _indCard('Llamadas','📞', h.llamadas, s.llamadas, m.llamadas, meta.llamadas)
+            + _indCard('Presencial','🏪', h.presencial, s.presencial, m.presencial, meta.presencial)
             + _indCard('Visitas','🚗', h.visitas, s.visitas, m.visitas, meta.visitas)
-            + '</div>';
+            + '</div>'
+            + '<p class="text-[9px] text-slate-400 mt-3">Cada canal acumula <b>puntos según el resultado</b> de tus interacciones. Presencial = clientes atendidos en Mostrador.</p>';
+    }
+
+    function _celdaCanal(hoy, meta){
+        if(!(meta>0)) return '<td class="py-2 px-2 text-center text-xs text-slate-400">'+hoy+'</td>';
+        let pct = Math.round((hoy/meta)*100);
+        let col = hoy>=meta ? 'text-emerald-600' : (pct>=50?'text-amber-500':'text-rose-500');
+        return '<td class="py-2 px-2 text-center text-xs font-bold '+col+'">'+hoy+' / '+meta+'</td>';
     }
 
     function renderEquipo(asesores){
@@ -1489,16 +1517,17 @@
             return '<tr class="border-b border-slate-100 cursor-pointer hover:bg-blue-50 transition-colors" onclick="abrirDesglose(\''+a.email+'\')" title="Ver desglose de puntos">'
                 + '<td class="py-2 px-2 font-bold text-slate-700 text-xs">'+a.alias+' <span class="text-[9px] text-blue-400">›</span></td>'
                 + '<td class="py-2 px-2 text-center font-black '+col+' text-xs">'+a.hoy.puntos+' / '+a.metas.puntos+' <span class="text-[9px]">('+pct+'%)</span></td>'
-                + '<td class="py-2 px-2 text-center text-xs text-slate-600">'+a.hoy.llamadas+(a.metas.llamadas>0?(' / '+a.metas.llamadas):'')+'</td>'
-                + '<td class="py-2 px-2 text-center text-xs text-slate-600">'+a.hoy.whatsapp+(a.metas.whatsapp>0?(' / '+a.metas.whatsapp):'')+'</td>'
-                + '<td class="py-2 px-2 text-center text-xs text-slate-600">'+a.hoy.visitas+(a.metas.visitas>0?(' / '+a.metas.visitas):'')+'</td>'
+                + _celdaCanal(a.hoy.whatsapp, a.metas.whatsapp)
+                + _celdaCanal(a.hoy.llamadas, a.metas.llamadas)
+                + _celdaCanal(a.hoy.presencial, a.metas.presencial)
+                + _celdaCanal(a.hoy.visitas, a.metas.visitas)
                 + '</tr>';
         }).join('');
         return '<div class="overflow-x-auto"><table class="w-full text-left">'
             + '<thead><tr class="text-[9px] text-slate-400 uppercase tracking-widest border-b border-slate-200">'
-            + '<th class="py-2 px-2">Asesor</th><th class="py-2 px-2 text-center">Puntos</th><th class="py-2 px-2 text-center">Llam.</th><th class="py-2 px-2 text-center">WA</th><th class="py-2 px-2 text-center">Visitas</th></tr></thead>'
+            + '<th class="py-2 px-2">Asesor</th><th class="py-2 px-2 text-center">Total</th><th class="py-2 px-2 text-center">📱 WA</th><th class="py-2 px-2 text-center">📞 Llam.</th><th class="py-2 px-2 text-center">🏪 Pres.</th><th class="py-2 px-2 text-center">🚗 Visitas</th></tr></thead>'
             + '<tbody>'+filas+'</tbody></table>'
-            + '<p class="text-[9px] text-slate-400 mt-3">Toca un vendedor para ver el desglose de sus puntos. Edita las metas en <b>METAS_USUARIO</b> o con el botón ⚙️ Ajustar metas.</p></div>';
+            + '<p class="text-[9px] text-slate-400 mt-3">Cada columna son <b>puntos por canal</b> (logrado / meta). Toca un vendedor para ver el desglose. Edita las metas con el botón ⚙️ Ajustar metas.</p></div>';
     }
 
     function actualizarDashboard() {
@@ -1532,6 +1561,9 @@
                 if (!res || !res.exito) return;
                 actualizarCockpitMes(res.puntos, res.meta);
             }).obtenerCockpitMes(usuarioLogueado, null);
+            const fechaCanales = FECHA_USUARIO_SEL ? yyyymmddToDdmmyyyy(FECHA_USUARIO_SEL) : null;
+            google.script.run.withSuccessHandler(renderHeaderCanales)
+                .obtenerRendimientoUsuario(usuarioLogueado, fechaCanales);
         }
     }
 
@@ -1567,6 +1599,32 @@
         fraccion.innerText = p + '/' + m;
         pct.innerText = pctNum + '%';
         estado.innerText = estadoTxt;
+    }
+
+    // Indicadores de puntos por canal en el header oscuro (solo vendedor).
+    function renderHeaderCanales(res){
+        const cont = document.getElementById('header-canales');
+        if(!cont || !res || !res.exito) return;
+        const h = res.hoy, meta = res.metas;
+        function card(nombre, emoji, hoy, m){
+            let pct = m>0 ? Math.round((hoy/m)*100) : 0;
+            let cumplido = m>0 && hoy>=m;
+            let col = !m ? 'text-slate-400' : cumplido ? 'text-emerald-400' : (pct>=50?'text-amber-400':'text-rose-400');
+            let bar = cumplido ? 'bg-emerald-400' : (pct>=50?'bg-amber-400':'bg-rose-400');
+            let pctBar = m>0 ? Math.min(100, pct) : 0;
+            let badge = m>0 ? (cumplido?'✓':pct+'%') : 'sin meta';
+            let metaTxt = m>0 ? (' / '+m) : '';
+            return '<div class="bg-white/5 p-3 rounded-2xl border border-white/10 backdrop-blur-md">'
+                + '<div class="flex items-center justify-between mb-1"><span class="text-[9px] font-black text-blue-300 uppercase tracking-wider">'+emoji+' '+nombre+'</span><span class="text-[9px] font-black '+col+'">'+badge+'</span></div>'
+                + '<p class="text-base md:text-lg font-black text-white leading-none">'+hoy+'<span class="text-[10px] text-slate-400">'+metaTxt+'</span></p>'
+                + '<div class="mt-2 h-1.5 bg-white/10 rounded-full overflow-hidden"><div class="h-full '+bar+' rounded-full transition-all" style="width:'+pctBar+'%"></div></div>'
+                + '</div>';
+        }
+        cont.innerHTML = card('WhatsApp','📱', h.whatsapp, meta.whatsapp)
+            + card('Llamadas','📞', h.llamadas, meta.llamadas)
+            + card('Presencial','🏪', h.presencial, meta.presencial)
+            + card('Visitas','🚗', h.visitas, meta.visitas);
+        cont.classList.remove('hidden');
     }
 
     function actualizarCockpit(atendidos, meta, clientesAtendidos) {
@@ -3557,9 +3615,9 @@
             function inp(campo, val){ return '<input type="number" min="0" step="0.5" value="'+val+'" id="meta-'+campo+'-'+e+'" class="w-16 p-1.5 bg-slate-50 rounded-lg text-xs border border-slate-200 outline-none text-center font-bold focus:ring-2 focus:ring-blue-400">'; }
             return '<tr class="border-b border-slate-100" data-email="'+e+'">'
                 + '<td class="py-2 px-1 font-bold text-slate-700 text-xs">'+a.alias+'</td>'
-                + '<td class="py-2 px-1 text-center">'+inp('puntos', a.puntos)+'</td>'
-                + '<td class="py-2 px-1 text-center">'+inp('llamadas', a.llamadas)+'</td>'
                 + '<td class="py-2 px-1 text-center">'+inp('whatsapp', a.whatsapp)+'</td>'
+                + '<td class="py-2 px-1 text-center">'+inp('llamadas', a.llamadas)+'</td>'
+                + '<td class="py-2 px-1 text-center">'+inp('presencial', a.presencial)+'</td>'
                 + '<td class="py-2 px-1 text-center">'+inp('visitas', a.visitas)+'</td>'
                 + '<td class="py-2 px-1 text-center"><button onclick="guardarMetaFila(\''+e+'\')" id="btnmeta-'+e+'" class="bg-emerald-600 text-white px-2.5 py-1.5 rounded-lg text-[10px] font-black uppercase hover:bg-emerald-700 active:scale-95 transition-all">Guardar</button></td>'
                 + '</tr>';
@@ -3576,18 +3634,26 @@
                 if(usuarioRol==='Admin') cargarRendimiento();
             } else { btn.innerText='Guardar'; btn.disabled=false; alert((res&&res.mensaje)?res.mensaje:'No se pudo guardar.'); }
         }).withFailureHandler(function(){ btn.innerText='Guardar'; btn.disabled=false; alert('Error de red.'); })
-          .guardarMetasUsuario({ email: email, puntos: v('puntos'), llamadas: v('llamadas'), whatsapp: v('whatsapp'), visitas: v('visitas') });
+          .guardarMetasUsuario({ email: email, whatsapp: v('whatsapp'), llamadas: v('llamadas'), presencial: v('presencial'), visitas: v('visitas') });
     }
 
-    function ponerMetaPuntosTodos() {
-        const val = document.getElementById('meta-todos-valor').value;
-        if(val === '' || isNaN(parseFloat(val))){ alert('Escribe un número de puntos.'); return; }
-        if(!confirm('¿Poner '+val+' puntos de meta diaria a TODOS los vendedores?')) return;
+    function _enviarMetasTodos(metas, msg) {
+        if(!confirm(msg)) return;
         google.script.run.withSuccessHandler(function(res){
-            if(res && res.exito){ alert('✅ Meta de '+res.valor+' puntos aplicada a '+res.vendedores+' vendedores.'); abrirModalMetas(); if(usuarioRol==='Admin') cargarRendimiento(); }
+            if(res && res.exito){ alert('✅ Metas '+res.metas.whatsapp+'/'+res.metas.llamadas+'/'+res.metas.presencial+'/'+res.metas.visitas+' aplicadas a '+res.vendedores+' vendedores.'); abrirModalMetas(); if(usuarioRol==='Admin') cargarRendimiento(); }
             else alert((res&&res.mensaje)?res.mensaje:'No se pudo aplicar.');
         }).withFailureHandler(function(){ alert('Error de red.'); })
-          .ajustarMetaPuntosTodos(val);
+          .aplicarMetasTodos(metas);
+    }
+
+    function aplicarMetasTodos() {
+        const g = function(id){ return document.getElementById(id).value; };
+        const metas = { whatsapp: g('meta-todos-whatsapp'), llamadas: g('meta-todos-llamadas'), presencial: g('meta-todos-presencial'), visitas: g('meta-todos-visitas') };
+        _enviarMetasTodos(metas, '¿Aplicar las metas '+metas.whatsapp+' WA / '+metas.llamadas+' Llam / '+metas.presencial+' Pres / '+metas.visitas+' Visitas a TODOS los vendedores?');
+    }
+
+    function restaurarMetasDefecto() {
+        _enviarMetasTodos({ whatsapp: 30, llamadas: 30, presencial: 10, visitas: 10 }, '¿Restaurar las metas por defecto 30/30/10/10 a TODOS los vendedores?');
     }
 
     // ===== Listados de gestión (admin) =====

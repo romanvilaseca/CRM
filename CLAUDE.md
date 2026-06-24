@@ -26,7 +26,7 @@ No usa `Session.getActiveUser()`. Login por **PIN**: `verificarAccesoUsuario(ema
 ## Sistema de puntos (por RESULTADO, no por canal)
 Tipo de interacción = canal (Visita/Llamada/WhatsApp/Mostrador). Resultado = desenlace. Esquema vigente en CONFIG_PUNTOS:
 Pedido/venta cerrada=3, Cotización=1, Pedido pendiente=1, Contacto efectivo=1, Cliente completo=0.5, Producto no disponible=0.5, Mensaje sin respuesta=0, No se obtuvo contacto=0.
-Meta diaria fijada en **30 puntos** para todos (editable por vendedor). El cockpit mide PUNTOS (no clientes únicos).
+**Metas diarias = 4 metas de PUNTOS por canal** (desde jun-2026; antes era una sola de 30): 📱 WhatsApp=30, 📞 Llamadas=30, 🏪 Presencial(Mostrador)=10, 🚗 Visitas=10 → total 80/día. Hoja `METAS_USUARIO` = `Vendedor | Meta WhatsApp | Meta llamadas | Meta presencial | Meta visitas` (migra sola la estructura vieja, resiembra 30/30/10/10). `obtenerMetasUsuario` devuelve `{whatsapp,llamadas,presencial,visitas,puntos=suma}`; `.puntos`=suma mantiene el anillo del cockpit (meta 80). `_acumular` suma puntos por canal e incluye `Vino a Sala de Ventas`→presencial. Ajuste masivo: `aplicarMetasTodos({...})`. Indicadores por canal en el header (`renderHeaderCanales`) y en MI RESUMEN. Ver memoria `crm-metas-por-canal`.
 
 ## Funciones clave nuevas
 - `obtenerRendimientoUsuario/Equipo`, `obtenerDesglosePuntosDia`, `generarDesglosePuntosPDF`.

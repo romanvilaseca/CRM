@@ -280,41 +280,59 @@ function migrarResultadosHistoricos() {
 
 // ============================================================
 // FASE 2 - METAS POR USUARIO + RENDIMIENTO POR PUNTOS
-// Hoja METAS_USUARIO (editable): Vendedor | Meta puntos | Meta llamadas | Meta WhatsApp | Meta visitas
-// El cockpit pasa a medir PUNTOS (no clientes únicos) - decisión C3.
+// Hoja METAS_USUARIO (editable): Vendedor | Meta WhatsApp | Meta llamadas | Meta presencial | Meta visitas
+// Las 4 metas son de PUNTOS por CANAL (según el resultado de cada interacción).
+// La "meta de puntos" total del cockpit = suma de las 4 (campo derivado .puntos).
 // ============================================================
-const METAS_HEADERS = ['Vendedor (correo)', 'Meta puntos', 'Meta llamadas', 'Meta WhatsApp', 'Meta visitas'];
+const METAS_HEADERS = ['Vendedor (correo)', 'Meta WhatsApp', 'Meta llamadas', 'Meta presencial', 'Meta visitas'];
+// Semilla por defecto de las metas diarias por canal (puntos).
+const METAS_DEFECTO = { whatsapp: 30, llamadas: 30, presencial: 10, visitas: 10 };
 
-// Crea METAS_USUARIO si no existe, con una fila por vendedor activo (no Admin).
-// Semilla: Meta puntos = meta_diaria_clientes existente (USUARIOS_AJUSTES col H). Resto en 0 (sin meta).
+function _filaSemillaMetas(email) {
+  return [email, METAS_DEFECTO.whatsapp, METAS_DEFECTO.llamadas, METAS_DEFECTO.presencial, METAS_DEFECTO.visitas];
+}
+
+// Crea METAS_USUARIO si no existe (semilla 30/30/10/10 por vendedor activo no-Admin).
+// Migra la estructura vieja (Meta puntos | Llamadas | WhatsApp | Visitas, en conteos)
+// reescribiendo la cabecera y resembrando con las metas por canal en puntos.
 function obtenerHojaMetasUsuario() {
   const ss = SpreadsheetApp.openById(SHEET_ID_CRM);
   let h = ss.getSheetByName('METAS_USUARIO');
   if (!h) {
     h = ss.insertSheet('METAS_USUARIO');
-    h.appendRow(METAS_HEADERS);
-    h.setFrozenRows(1);
-    h.getRange(1, 1, 1, METAS_HEADERS.length).setFontWeight('bold');
-    h.setColumnWidth(1, 260);
-    const hojaAjustes = ss.getSheetByName('USUARIOS_AJUSTES');
-    if (hojaAjustes) {
-      const datos = hojaAjustes.getDataRange().getDisplayValues();
-      for (let i = 1; i < datos.length; i++) {
-        let rol = String(datos[i][1]).trim();
-        let estado = String(datos[i][3]).trim();
-        if (estado !== 'Activo' || rol === 'Admin') continue;
-        let email = String(datos[i][0]).trim().toLowerCase();
-        if (!email) continue;
-        let metaPuntos = parseInt(String(datos[i][7] || '').trim(), 10);
-        if (isNaN(metaPuntos) || metaPuntos <= 0) metaPuntos = 10;
-        h.appendRow([email, metaPuntos, 0, 0, 0]);
-      }
-    }
+    _inicializarHojaMetas(h, ss);
+    return h;
+  }
+  // Migración: si la cabecera no coincide con el modelo por canal, reconstruir.
+  const cab = String(h.getRange(1, 2).getValue()).trim();
+  if (cab !== 'Meta WhatsApp') {
+    h.clear();
+    _inicializarHojaMetas(h, ss);
   }
   return h;
 }
 
-// Devuelve un mapa email -> {puntos, llamadas, whatsapp, visitas}
+function _inicializarHojaMetas(h, ss) {
+  h.appendRow(METAS_HEADERS);
+  h.setFrozenRows(1);
+  h.getRange(1, 1, 1, METAS_HEADERS.length).setFontWeight('bold');
+  h.setColumnWidth(1, 260);
+  const hojaAjustes = ss.getSheetByName('USUARIOS_AJUSTES');
+  if (hojaAjustes) {
+    const datos = hojaAjustes.getDataRange().getDisplayValues();
+    for (let i = 1; i < datos.length; i++) {
+      let rol = String(datos[i][1]).trim();
+      let estado = String(datos[i][3]).trim();
+      if (estado !== 'Activo' || rol === 'Admin') continue;
+      let email = String(datos[i][0]).trim().toLowerCase();
+      if (!email) continue;
+      h.appendRow(_filaSemillaMetas(email));
+    }
+  }
+}
+
+// Devuelve un mapa email -> {whatsapp, llamadas, presencial, visitas, puntos}
+// donde .puntos = suma de las 4 metas de canal (meta total diaria).
 function obtenerTodasLasMetas() {
   const h = obtenerHojaMetasUsuario();
   const data = h.getDataRange().getValues();
@@ -322,20 +340,35 @@ function obtenerTodasLasMetas() {
   for (let i = 1; i < data.length; i++) {
     let email = String(data[i][0]).trim().toLowerCase();
     if (!email) continue;
+    let whatsapp = parseFloat(data[i][1]) || 0;
+    let llamadas = parseFloat(data[i][2]) || 0;
+    let presencial = parseFloat(data[i][3]) || 0;
+    let visitas = parseFloat(data[i][4]) || 0;
     map[email] = {
-      puntos: parseFloat(data[i][1]) || 0,
-      llamadas: parseFloat(data[i][2]) || 0,
-      whatsapp: parseFloat(data[i][3]) || 0,
-      visitas: parseFloat(data[i][4]) || 0
+      whatsapp: whatsapp,
+      llamadas: llamadas,
+      presencial: presencial,
+      visitas: visitas,
+      puntos: whatsapp + llamadas + presencial + visitas
     };
   }
   return map;
 }
 
+function _metasPorDefecto() {
+  return {
+    whatsapp: METAS_DEFECTO.whatsapp,
+    llamadas: METAS_DEFECTO.llamadas,
+    presencial: METAS_DEFECTO.presencial,
+    visitas: METAS_DEFECTO.visitas,
+    puntos: METAS_DEFECTO.whatsapp + METAS_DEFECTO.llamadas + METAS_DEFECTO.presencial + METAS_DEFECTO.visitas
+  };
+}
+
 function obtenerMetasUsuario(email) {
   const map = obtenerTodasLasMetas();
   const e = String(email || '').trim().toLowerCase();
-  return map[e] || { puntos: 10, llamadas: 0, whatsapp: 0, visitas: 0 };
+  return map[e] || _metasPorDefecto();
 }
 
 // Lista de vendedores activos con su alias y sus 4 metas (para el editor del admin).
@@ -355,8 +388,8 @@ function obtenerMetasEquipo() {
         let email = String(datos[i][0]).trim().toLowerCase();
         if (!email) continue;
         let alias = String(datos[i][4]).trim() || email.split('@')[0];
-        let m = map[email] || { puntos: 10, llamadas: 0, whatsapp: 0, visitas: 0 };
-        lista.push({ email: email, alias: alias, puntos: m.puntos, llamadas: m.llamadas, whatsapp: m.whatsapp, visitas: m.visitas });
+        let m = map[email] || _metasPorDefecto();
+        lista.push({ email: email, alias: alias, whatsapp: m.whatsapp, llamadas: m.llamadas, presencial: m.presencial, visitas: m.visitas, puntos: m.puntos });
       }
     }
     return { exito: true, asesores: lista };
@@ -365,7 +398,7 @@ function obtenerMetasEquipo() {
   }
 }
 
-// Guarda/actualiza las 4 metas de un vendedor en METAS_USUARIO (solo admin desde el modal).
+// Guarda/actualiza las 4 metas de canal de un vendedor en METAS_USUARIO (solo admin desde el modal).
 function guardarMetasUsuario(d) {
   try {
     const email = String(d.email || '').trim().toLowerCase();
@@ -374,10 +407,10 @@ function guardarMetasUsuario(d) {
     const data = h.getDataRange().getValues();
     const fila = [
       email,
-      _numMeta(d.puntos, 30),
-      _numMeta(d.llamadas, 0),
-      _numMeta(d.whatsapp, 0),
-      _numMeta(d.visitas, 0)
+      _numMeta(d.whatsapp, METAS_DEFECTO.whatsapp),
+      _numMeta(d.llamadas, METAS_DEFECTO.llamadas),
+      _numMeta(d.presencial, METAS_DEFECTO.presencial),
+      _numMeta(d.visitas, METAS_DEFECTO.visitas)
     ];
     let encontrado = -1;
     for (let i = 1; i < data.length; i++) {
@@ -388,7 +421,7 @@ function guardarMetasUsuario(d) {
     } else {
       h.appendRow(fila);
     }
-    return { exito: true, metas: { puntos: fila[1], llamadas: fila[2], whatsapp: fila[3], visitas: fila[4] } };
+    return { exito: true, metas: { whatsapp: fila[1], llamadas: fila[2], presencial: fila[3], visitas: fila[4], puntos: fila[1] + fila[2] + fila[3] + fila[4] } };
   } catch (e) {
     return { exito: false, mensaje: e.message };
   }
@@ -400,16 +433,23 @@ function _numMeta(v, def) {
   return n;
 }
 
-// Ajuste masivo de la Meta puntos para todos los vendedores (admin).
-function ajustarMetaPuntosTodos(valor) {
+// Ajuste masivo: aplica las mismas 4 metas de canal a todos los vendedores (admin).
+// d = {whatsapp, llamadas, presencial, visitas}. Si falta alguno usa la semilla 30/30/10/10.
+function aplicarMetasTodos(d) {
   try {
-    const v = _numMeta(valor, 30);
+    d = d || {};
+    const metas = {
+      whatsapp: _numMeta(d.whatsapp, METAS_DEFECTO.whatsapp),
+      llamadas: _numMeta(d.llamadas, METAS_DEFECTO.llamadas),
+      presencial: _numMeta(d.presencial, METAS_DEFECTO.presencial),
+      visitas: _numMeta(d.visitas, METAS_DEFECTO.visitas)
+    };
     obtenerHojaMetasUsuario();
     const eq = obtenerMetasEquipo();
     eq.asesores.forEach(function(a) {
-      guardarMetasUsuario({ email: a.email, puntos: v, llamadas: a.llamadas, whatsapp: a.whatsapp, visitas: a.visitas });
+      guardarMetasUsuario({ email: a.email, whatsapp: metas.whatsapp, llamadas: metas.llamadas, presencial: metas.presencial, visitas: metas.visitas });
     });
-    return { exito: true, valor: v, vendedores: eq.asesores.length };
+    return { exito: true, metas: metas, vendedores: eq.asesores.length };
   } catch (e) {
     return { exito: false, mensaje: e.message };
   }
@@ -445,13 +485,24 @@ function _refContexto(fechaStrOpcional) {
   return { ref: ref, weekStart: weekStart, weekEnd: weekEnd, monthStart: monthStart, monthEnd: monthEnd };
 }
 
-function _bucketVacio() { return { puntos: 0, llamadas: 0, whatsapp: 0, visitas: 0 }; }
+function _bucketVacio() { return { puntos: 0, whatsapp: 0, llamadas: 0, presencial: 0, visitas: 0 }; }
 
+// Acumula PUNTOS por canal (no conteos). .puntos = total de todos los canales.
 function _acumular(bucket, tipo, puntos) {
   bucket.puntos += puntos;
-  if (tipo === 'Llamada Telefónica') bucket.llamadas++;
-  else if (tipo === 'Contacto WhatsApp') bucket.whatsapp++;
-  else if (tipo === 'Visita en Persona') bucket.visitas++;
+  if (tipo === 'Llamada Telefónica') bucket.llamadas += puntos;
+  else if (tipo === 'Contacto WhatsApp') bucket.whatsapp += puntos;
+  else if (tipo === 'Visita en Persona') bucket.visitas += puntos;
+  else if (tipo === 'Vino a Sala de Ventas') bucket.presencial += puntos;
+}
+
+function _redondearBucket(b) {
+  b.puntos = Math.round(b.puntos * 100) / 100;
+  b.whatsapp = Math.round(b.whatsapp * 100) / 100;
+  b.llamadas = Math.round(b.llamadas * 100) / 100;
+  b.presencial = Math.round(b.presencial * 100) / 100;
+  b.visitas = Math.round(b.visitas * 100) / 100;
+  return b;
 }
 
 // Rendimiento de un vendedor: hoy / semana / mes (4 indicadores) + sus metas.
@@ -477,7 +528,7 @@ function obtenerRendimientoUsuario(emailUsuario, fechaStrOpcional) {
         if (t >= ctx.monthStart.getTime() && t <= ctx.monthEnd.getTime()) _acumular(mes, tipo, pts);
       }
     }
-    [hoy, semana, mes].forEach(function(b){ b.puntos = Math.round(b.puntos * 100) / 100; });
+    [hoy, semana, mes].forEach(_redondearBucket);
     return { exito: true, hoy: hoy, semana: semana, mes: mes, metas: obtenerMetasUsuario(email) };
   } catch (e) {
     return { exito: false, mensaje: e.message };
@@ -502,7 +553,7 @@ function obtenerRendimientoEquipo(fechaStrOpcional) {
         let email = String(datos[i][0]).trim().toLowerCase();
         if (!email) continue;
         let alias = String(datos[i][4]).trim() || email.split('@')[0];
-        asesores[email] = { email: email, alias: alias, metas: metasMap[email] || { puntos: 10, llamadas: 0, whatsapp: 0, visitas: 0 }, hoy: _bucketVacio() };
+        asesores[email] = { email: email, alias: alias, metas: metasMap[email] || _metasPorDefecto(), hoy: _bucketVacio() };
         orden.push(email);
       }
     }
@@ -517,7 +568,7 @@ function obtenerRendimientoEquipo(fechaStrOpcional) {
         _acumular(asesores[email].hoy, String(data[i][4] || '').trim(), _puntosValidos(data[i]));
       }
     }
-    const lista = orden.map(function(em){ const a = asesores[em]; a.hoy.puntos = Math.round(a.hoy.puntos * 100) / 100; return a; });
+    const lista = orden.map(function(em){ const a = asesores[em]; _redondearBucket(a.hoy); return a; });
     lista.sort(function(a, b){
       let pa = a.metas.puntos > 0 ? a.hoy.puntos / a.metas.puntos : a.hoy.puntos;
       let pb = b.metas.puntos > 0 ? b.hoy.puntos / b.metas.puntos : b.hoy.puntos;
